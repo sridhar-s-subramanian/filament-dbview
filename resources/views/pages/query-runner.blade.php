@@ -1,9 +1,53 @@
 <x-filament-panels::page>
-    <div class="grid gap-6 lg:grid-cols-4">
+    <style>
+        .fdbv-qr { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
+        @media (min-width: 1024px) { .fdbv-qr { grid-template-columns: minmax(0, 1fr) 18rem; } }
+        .fdbv-qr-main { min-width: 0; display: flex; flex-direction: column; gap: 1rem; }
+        .fdbv-qr-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .625rem; }
+        .fdbv-qr-field { display: flex; flex-direction: column; gap: .25rem; }
+        .fdbv-qr-label { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: rgb(107 114 128); }
+
+        .fdbv-qr-editor { position: relative; }
+        .fdbv-qr-textarea {
+            display: block; width: 100%; min-height: 12rem; resize: vertical;
+            padding: .75rem .875rem; border-radius: .625rem;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85rem; line-height: 1.6; tab-size: 2;
+            color: rgb(31 41 55); background: #fff;
+            border: 1px solid rgb(209 213 219); box-shadow: 0 1px 2px rgba(0,0,0,.05);
+        }
+        .fdbv-qr-textarea::placeholder { color: rgb(156 163 175); }
+        .fdbv-qr-textarea:focus { outline: none; border-color: rgb(var(--primary-500)); box-shadow: 0 0 0 2px rgb(var(--primary-500) / .3); }
+        .dark .fdbv-qr-textarea { color: rgb(229 231 235); background: rgb(17 24 39); border-color: rgba(255,255,255,.1); }
+        .dark .fdbv-qr-textarea::placeholder { color: rgb(107 114 128); }
+        .fdbv-qr-kbd { position: absolute; right: .625rem; bottom: .625rem; padding: .1rem .4rem; border-radius: .3rem; font-size: .65rem; font-family: ui-monospace, monospace; color: rgb(107 114 128); background: rgba(0,0,0,.05); pointer-events: none; }
+        .dark .fdbv-qr-kbd { color: rgb(156 163 175); background: rgba(255,255,255,.08); }
+
+        .fdbv-qr-hint { font-size: .72rem; color: rgb(107 114 128); }
+        .dark .fdbv-qr-hint { color: rgb(156 163 175); }
+        .fdbv-qr-error { border: 1px solid rgb(252 165 165); background: rgb(254 242 242); color: rgb(185 28 28); border-radius: .5rem; padding: .625rem .75rem; font-size: .8rem; }
+        .dark .fdbv-qr-error { border-color: rgba(248,113,113,.3); background: rgba(248,113,113,.1); color: rgb(248 113 113); }
+
+        .fdbv-qr-card { overflow: hidden; border-radius: .75rem; background: #fff; border: 1px solid rgba(0,0,0,.06); box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+        .dark .fdbv-qr-card { background: rgb(17 24 39); border-color: rgba(255,255,255,.1); }
+        .fdbv-qr-card + .fdbv-qr-card { margin-top: 1.25rem; }
+        .fdbv-qr-card-head { padding: .55rem .75rem; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: rgb(107 114 128); border-bottom: 1px solid rgba(0,0,0,.06); }
+        .dark .fdbv-qr-card-head { color: rgb(156 163 175); border-color: rgba(255,255,255,.08); }
+        .fdbv-qr-list { display: flex; flex-direction: column; padding: .375rem; gap: 2px; max-height: 40vh; overflow-y: auto; }
+        .fdbv-qr-item { display: block; width: 100%; text-align: left; padding: .4rem .55rem; border-radius: .4rem; color: rgb(55 65 81); cursor: pointer; transition: background-color .15s; }
+        .fdbv-qr-item:hover { background: rgb(249 250 251); }
+        .dark .fdbv-qr-item { color: rgb(209 213 219); }
+        .dark .fdbv-qr-item:hover { background: rgba(255,255,255,.05); }
+        .fdbv-qr-item .n { display: block; font-size: .8rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .fdbv-qr-item .q { display: block; font-family: ui-monospace, monospace; font-size: .68rem; color: rgb(156 163 175); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .fdbv-qr-empty { padding: .75rem; font-size: .78rem; color: rgb(156 163 175); }
+    </style>
+
+    <div class="fdbv-qr">
         {{-- Editor + results --}}
-        <div class="lg:col-span-3 space-y-4">
-            <div class="grid gap-4 sm:grid-cols-3">
-                <div class="sm:col-span-2">
+        <div class="fdbv-qr-main">
+            <div class="fdbv-qr-toolbar">
+                <div class="fdbv-qr-field" style="flex: 1 1 16rem;">
+                    <span class="fdbv-qr-label">{{ __('Connection') }}</span>
                     <x-filament::input.wrapper>
                         <x-filament::input.select wire:model="connection">
                             @foreach ($this->getConnectionOptions() as $value => $label)
@@ -12,43 +56,46 @@
                         </x-filament::input.select>
                     </x-filament::input.wrapper>
                 </div>
-                <div>
-                    <x-filament::input.wrapper prefix="{{ __('Limit') }}">
+
+                <div class="fdbv-qr-field" style="width: 8rem;">
+                    <span class="fdbv-qr-label">{{ __('Row limit') }}</span>
+                    <x-filament::input.wrapper>
                         <x-filament::input type="number" min="1" wire:model="rowLimit" />
                     </x-filament::input.wrapper>
+                </div>
+
+                <div class="fdbv-qr-field" style="align-self: flex-end;">
+                    <x-filament::button wire:click="run" wire:loading.attr="disabled" wire:target="run" icon="heroicon-m-play">
+                        {{ __('Run') }}
+                    </x-filament::button>
                 </div>
             </div>
 
             <div
+                class="fdbv-qr-editor"
                 x-data
                 x-on:keydown.ctrl.enter.prevent="$wire.run()"
                 x-on:keydown.meta.enter.prevent="$wire.run()"
             >
                 <textarea
                     wire:model="sql"
-                    rows="8"
                     spellcheck="false"
                     placeholder="SELECT * FROM users"
-                    class="block w-full rounded-lg border-gray-300 bg-white font-mono text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-white/10 dark:bg-white/5 dark:text-gray-200"
+                    class="fdbv-qr-textarea"
                 ></textarea>
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {{ __('Read-only. A single SELECT (or WITH … SELECT) statement, scoped to your models. Ctrl/⌘+Enter to run.') }}
-                </p>
+                <span class="fdbv-qr-kbd">⌘/Ctrl + ⏎</span>
             </div>
 
-            <div class="flex items-center gap-2">
-                <x-filament::button wire:click="run" wire:loading.attr="disabled" icon="heroicon-m-play">
-                    {{ __('Run') }}
-                </x-filament::button>
-                <span wire:loading wire:target="run" class="text-sm text-gray-500 dark:text-gray-400">
-                    {{ __('Running…') }}
-                </span>
+            <p class="fdbv-qr-hint">
+                {{ __('Read-only. A single SELECT (or WITH … SELECT) statement, scoped to your models.') }}
+            </p>
+
+            <div wire:loading.flex wire:target="run" class="fdbv-qr-hint" style="align-items:center; gap:.4rem;">
+                {{ __('Running…') }}
             </div>
 
             @if ($error)
-                <div class="rounded-lg border border-danger-300 bg-danger-50 px-4 py-3 text-sm text-danger-700 dark:border-danger-400/30 dark:bg-danger-400/10 dark:text-danger-400">
-                    {{ $error }}
-                </div>
+                <div class="fdbv-qr-error">{{ $error }}</div>
             @endif
 
             @if ($hasRun && ! $error)
@@ -63,44 +110,37 @@
         </div>
 
         {{-- Sidebar: saved queries + history --}}
-        <div class="space-y-6">
+        <aside>
             @if (config('filament-dbview.features.saved_queries', true))
-                <x-filament::section compact>
-                    <x-slot name="heading">{{ __('Saved queries') }}</x-slot>
-                    @php($saved = $this->getSavedQueries())
-                    @forelse ($saved as $item)
-                        <button
-                            type="button"
-                            wire:click="loadSaved({{ $item->id }})"
-                            class="block w-full truncate rounded px-2 py-1 text-start text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
-                            title="{{ $item->sql }}"
-                        >
-                            {{ $item->name }}
-                        </button>
-                    @empty
-                        <p class="text-sm text-gray-500 dark:text-gray-400">{{ __('None yet.') }}</p>
-                    @endforelse
-                </x-filament::section>
+                <div class="fdbv-qr-card">
+                    <div class="fdbv-qr-card-head">{{ __('Saved queries') }}</div>
+                    <div class="fdbv-qr-list">
+                        @forelse ($this->getSavedQueries() as $item)
+                            <button type="button" wire:click="loadSaved({{ $item->id }})" class="fdbv-qr-item" title="{{ $item->sql }}">
+                                <span class="n">{{ $item->name }}</span>
+                                <span class="q">{{ \Illuminate\Support\Str::limit($item->sql, 42) }}</span>
+                            </button>
+                        @empty
+                            <p class="fdbv-qr-empty">{{ __('None yet.') }}</p>
+                        @endforelse
+                    </div>
+                </div>
             @endif
 
             @if (config('filament-dbview.features.history', true))
-                <x-filament::section compact>
-                    <x-slot name="heading">{{ __('Recent queries') }}</x-slot>
-                    @php($history = $this->getHistory())
-                    @forelse ($history as $item)
-                        <button
-                            type="button"
-                            wire:click="loadHistory({{ $item->id }})"
-                            class="block w-full truncate rounded px-2 py-1 text-start font-mono text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/5"
-                            title="{{ $item->sql }}"
-                        >
-                            {{ \Illuminate\Support\Str::limit($item->sql, 40) }}
-                        </button>
-                    @empty
-                        <p class="text-sm text-gray-500 dark:text-gray-400">{{ __('None yet.') }}</p>
-                    @endforelse
-                </x-filament::section>
+                <div class="fdbv-qr-card">
+                    <div class="fdbv-qr-card-head">{{ __('Recent queries') }}</div>
+                    <div class="fdbv-qr-list">
+                        @forelse ($this->getHistory() as $item)
+                            <button type="button" wire:click="loadHistory({{ $item->id }})" class="fdbv-qr-item" title="{{ $item->sql }}">
+                                <span class="q">{{ \Illuminate\Support\Str::limit($item->sql, 46) }}</span>
+                            </button>
+                        @empty
+                            <p class="fdbv-qr-empty">{{ __('None yet.') }}</p>
+                        @endforelse
+                    </div>
+                </div>
             @endif
-        </div>
+        </aside>
     </div>
 </x-filament-panels::page>

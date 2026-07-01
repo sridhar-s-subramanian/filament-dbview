@@ -106,7 +106,12 @@ final class ReadOnlyGuard
         }
 
         $limit = $this->resolveLimit($limit);
-        $wrapped = $this->wrapWithLimit($sql, $limit);
+
+        // Raw SQL bypasses Eloquent's automatic table-prefixing, so translate
+        // the logical model table names the user typed (as shown in the browser)
+        // into their real prefixed names before execution.
+        $executable = $this->applyTablePrefixes($sql, $analysis, $connection);
+        $wrapped = $this->wrapWithLimit($executable, $limit);
 
         $start = microtime(true);
         $rows = $this->executeReadOnly($this->connections->connection($connection), $wrapped);
@@ -123,6 +128,49 @@ final class ReadOnlyGuard
         $this->auditor->record($sql, $physical, $result->rowCount, $durationMs, true);
 
         return $result;
+    }
+
+    /**
+     * Replace referenced logical table names with their real (prefixed) names.
+     * Only identifiers appearing after FROM/JOIN or as a `table.` qualifier are
+     * rewritten, so string literals and column names are left untouched.
+     */
+    private function applyTablePrefixes(string $sql, SqlAnalyzer $analysis, ?string $connection): string
+    {
+        $registry = $this->discovery->registry();
+
+        foreach ($analysis->tables as $logical) {
+            $info = $registry->get($logical);
+
+            if ($info === null) {
+                continue;
+            }
+
+            $prefix = $this->connections->connection($info->connection ?? $connection)->getTablePrefix();
+
+            if ($prefix === '') {
+                continue;
+            }
+
+            $physical = $prefix . $logical;
+            $quoted = preg_quote($logical, '/');
+
+            // `FROM logical` / `JOIN logical` (optionally back-ticked).
+            $sql = (string) preg_replace(
+                '/(\b(?:FROM|JOIN)\s+`?)' . $quoted . '\b/i',
+                '${1}' . $physical,
+                $sql,
+            );
+
+            // Qualified references: `logical.column`.
+            $sql = (string) preg_replace(
+                '/(?<![\w.])' . $quoted . '(\s*\.)/i',
+                $physical . '${1}',
+                $sql,
+            );
+        }
+
+        return $sql;
     }
 
     /**

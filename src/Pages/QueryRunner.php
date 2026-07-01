@@ -97,18 +97,14 @@ final class QueryRunner extends Page
                 ->success()
                 ->send();
         } catch (UnsafeQueryException $e) {
-            // Safe, user-facing validation message.
+            // Safe, user-facing validation message shown inline (no toast).
             $this->error = $e->getMessage();
             $this->hasRun = true;
-
-            Notification::make()->title('Query blocked')->body($e->getMessage())->danger()->send();
         } catch (Throwable $e) {
             // Never leak driver internals / stack traces to the UI (OWASP A09).
             Log::error('filament-dbview query execution failed', ['exception' => $e]);
             $this->error = 'The query could not be executed. Please check the syntax and try again.';
             $this->hasRun = true;
-
-            Notification::make()->title('Query failed')->body($this->error)->danger()->send();
         }
     }
 
@@ -138,13 +134,9 @@ final class QueryRunner extends Page
      */
     protected function getHeaderActions(): array
     {
-        $actions = [
-            Action::make('run')
-                ->label('Run')
-                ->icon('heroicon-m-play')
-                ->keyBindings(['mod+enter'])
-                ->action(fn() => $this->run()),
-        ];
+        // Run lives in the editor toolbar (with ⌘/Ctrl+Enter); header keeps the
+        // result-oriented actions only.
+        $actions = [];
 
         if (config('filament-dbview.features.export', true)) {
             $actions[] = Action::make('exportCsv')

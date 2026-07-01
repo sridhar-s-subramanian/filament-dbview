@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<ruleset name="filament-dbview">
+    <description>PSR-12 coding standard for filament-dbview.</description>
+
+    <file>src</file>
+
+    <arg name="colors"/>
+    <arg value="p"/>
+
+    <rule ref="PSR12"/>
+</ruleset>

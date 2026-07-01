@@ -1,0 +1,13 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 6
+    paths:
+        - src
+    tmpDir: build/phpstan
+    ignoreErrors:
+        # Package view namespaces are not resolvable during static analysis.
+        - identifier: argument.type
+          message: '#Parameter \#1 \$view of function view expects view-string\|null, string given\.#'
+          path: src/Pages/DatabaseBrowser.php

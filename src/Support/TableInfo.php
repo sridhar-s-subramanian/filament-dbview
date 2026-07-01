@@ -14,6 +14,7 @@ final class TableInfo
     /**
      * @param  class-string  $model
      * @param  list<string>  $columns
+     * @param  array<string, string>  $columnTypes  column name => category (text|numeric|date|boolean)
      * @param  list<ForeignKey>  $foreignKeys
      */
     public function __construct(
@@ -22,6 +23,7 @@ final class TableInfo
         public readonly ?string $connection,
         public readonly ?string $keyName,
         public readonly array $columns,
+        public readonly array $columnTypes = [],
         public readonly array $foreignKeys = [],
     ) {}
 
@@ -31,7 +33,16 @@ final class TableInfo
     }
 
     /**
-     * @return array{model: class-string, table: string, connection: string|null, keyName: string|null, columns: list<string>, foreignKeys: list<ForeignKey>}
+     * The filter category for a column (text|numeric|date|boolean); defaults to
+     * text when the type could not be introspected.
+     */
+    public function categoryFor(string $column): string
+    {
+        return $this->columnTypes[$column] ?? 'text';
+    }
+
+    /**
+     * @return array{model: class-string, table: string, connection: string|null, keyName: string|null, columns: list<string>, columnTypes: array<string, string>, foreignKeys: list<ForeignKey>}
      */
     public function toArray(): array
     {
@@ -41,12 +52,13 @@ final class TableInfo
             'connection' => $this->connection,
             'keyName' => $this->keyName,
             'columns' => $this->columns,
+            'columnTypes' => $this->columnTypes,
             'foreignKeys' => $this->foreignKeys,
         ];
     }
 
     /**
-     * @param  array{model: class-string, table: string, connection: string|null, keyName?: string|null, columns: list<string>, foreignKeys?: list<ForeignKey>}  $data
+     * @param  array{model: class-string, table: string, connection: string|null, keyName?: string|null, columns: list<string>, columnTypes?: array<string, string>, foreignKeys?: list<ForeignKey>}  $data
      */
     public static function fromArray(array $data): self
     {
@@ -56,6 +68,7 @@ final class TableInfo
             connection: $data['connection'],
             keyName: $data['keyName'] ?? null,
             columns: $data['columns'],
+            columnTypes: $data['columnTypes'] ?? [],
             foreignKeys: $data['foreignKeys'] ?? [],
         );
     }

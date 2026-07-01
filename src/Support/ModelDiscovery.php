@@ -106,6 +106,7 @@ final class ModelDiscovery
                 connection: $connection,
                 keyName: $model->getKeyName(),
                 columns: $columns,
+                columnTypes: $this->columnTypesFor($connection, $table),
                 foreignKeys: $this->foreignKeysFor($connection, $table),
             );
         } catch (Throwable) {
@@ -113,6 +114,49 @@ final class ModelDiscovery
             // not browsable; never surface schema errors during discovery.
             return null;
         }
+    }
+
+    /**
+     * Map each column to a coarse filter category (text|numeric|date|boolean)
+     * derived from its database type, for building Adminer-style filters.
+     *
+     * @return array<string, string>
+     */
+    private function columnTypesFor(?string $connection, string $table): array
+    {
+        try {
+            $columns = Schema::connection($connection)->getColumns($table);
+        } catch (Throwable) {
+            return [];
+        }
+
+        $types = [];
+
+        foreach ($columns as $column) {
+            $types[$column['name']] = $this->categorise($column['type_name']);
+        }
+
+        return $types;
+    }
+
+    private function categorise(string $type): string
+    {
+        $type = strtolower($type);
+
+        return match (true) {
+            str_contains($type, 'bool') => 'boolean',
+            str_contains($type, 'int'),
+            str_contains($type, 'dec'),
+            str_contains($type, 'numeric'),
+            str_contains($type, 'float'),
+            str_contains($type, 'double'),
+            str_contains($type, 'real'),
+            str_contains($type, 'money') => 'numeric',
+            str_contains($type, 'date'),
+            str_contains($type, 'time'),
+            str_contains($type, 'year') => 'date',
+            default => 'text',
+        };
     }
 
     /**

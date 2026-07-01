@@ -10,8 +10,15 @@ use Filament\Pages\Page;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Enums\FiltersLayout;
+use Filament\Tables\Filters\QueryBuilder;
+use Filament\Tables\Filters\QueryBuilder\Constraints\BooleanConstraint;
+use Filament\Tables\Filters\QueryBuilder\Constraints\DateConstraint;
+use Filament\Tables\Filters\QueryBuilder\Constraints\NumberConstraint;
+use Filament\Tables\Filters\QueryBuilder\Constraints\TextConstraint;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Livewire\Attributes\Url;
 use SridharSSubramanian\FilamentDbview\Support\Authorization;
 use SridharSSubramanian\FilamentDbview\Support\DynamicModel;
 use SridharSSubramanian\FilamentDbview\Support\ModelDiscovery;
@@ -32,6 +39,9 @@ final class DatabaseBrowser extends Page implements HasTable
 
     protected string $view = 'filament-dbview::pages.database-browser';
 
+    // Kept in the query string so the chosen table survives a full page refresh
+    // and can be shared/bookmarked (e.g. ?table=transactions).
+    #[Url(as: 'table')]
     public ?string $selectedTable = null;
 
     public function mount(): void
@@ -55,6 +65,27 @@ final class DatabaseBrowser extends Page implements HasTable
     }
 
     /**
+     * Filament keys its persisted column-visibility state by page class alone,
+     * so a single-page, many-tables browser would share one visible-column set
+     * across every table — collapsing to the columns they have in common
+     * (id, created_at, updated_at). Scope the key to the selected table so each
+     * table keeps its own toggles and defaults to all columns visible.
+     */
+    public function getTableColumnsSessionKey(): string
+    {
+        $key = md5(static::class . '|' . ($this->selectedTable ?? ''));
+
+        return "tables.{$key}_columns";
+    }
+
+    public function getHasReorderedTableColumnsSessionKey(): string
+    {
+        $key = md5(static::class . '|' . ($this->selectedTable ?? ''));
+
+        return "tables.{$key}_has_reordered_columns";
+    }
+
+    /**
      * Options for the table picker in the view.
      *
      * @return array<string, string>
@@ -75,12 +106,46 @@ final class DatabaseBrowser extends Page implements HasTable
                 ->columns([]);
         }
 
+        $constraints = $this->constraintsFor($info);
+
         return $table
             ->query(fn(): Builder => DynamicModel::for($info)->newQuery())
             ->columns($this->columnsFor($info))
+            ->filters(
+                $constraints === [] ? [] : [QueryBuilder::make()->constraints($constraints)],
+                layout: FiltersLayout::AboveContentCollapsible,
+            )
             ->recordActions($this->relationshipActions($info))
             ->paginated([25, 50, 100])
             ->defaultPaginationPageOption(25);
+    }
+
+    /**
+     * Adminer-style filter constraints (column → operator → value, combinable
+     * with AND/OR groups) auto-derived from each column's type. Sensitive
+     * (redacted) columns are excluded so their values cannot be probed.
+     *
+     * @return list<TextConstraint|NumberConstraint|DateConstraint|BooleanConstraint>
+     */
+    private function constraintsFor(TableInfo $info): array
+    {
+        $redactor = new Redactor();
+        $constraints = [];
+
+        foreach ($info->columns as $column) {
+            if ($redactor->redacts($column)) {
+                continue;
+            }
+
+            $constraints[] = match ($info->categoryFor($column)) {
+                'numeric' => NumberConstraint::make($column)->label($column),
+                'date' => DateConstraint::make($column)->label($column),
+                'boolean' => BooleanConstraint::make($column)->label($column),
+                default => TextConstraint::make($column)->label($column),
+            };
+        }
+
+        return $constraints;
     }
 
     /**
@@ -95,7 +160,9 @@ final class DatabaseBrowser extends Page implements HasTable
                 ->label($column)
                 ->sortable()
                 ->toggleable()
-                ->wrap();
+                ->wrap()
+                // Show NULL explicitly (rather than a blank cell) for null values.
+                ->placeholder('NULL');
 
             if ($redactor->redacts($column)) {
                 // Never send the real value to the browser for sensitive columns.

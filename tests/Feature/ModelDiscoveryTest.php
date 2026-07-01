@@ -18,6 +18,17 @@ it('discovers model-backed tables and their columns', function (): void {
         ->and($posts->columns)->toContain('id')->toContain('title')->toContain('user_id');
 });
 
+it('categorises column types for Adminer-style filters', function (): void {
+    $posts = app(ModelDiscovery::class)->registry()->get('posts');
+
+    expect($posts->categoryFor('id'))->toBe('numeric')
+        ->and($posts->categoryFor('user_id'))->toBe('numeric')
+        ->and($posts->categoryFor('title'))->toBe('text')
+        ->and($posts->categoryFor('body'))->toBe('text')
+        // Unknown columns fall back to text.
+        ->and($posts->categoryFor('does_not_exist'))->toBe('text');
+});
+
 it('exposes select options and table names', function (): void {
     $registry = app(ModelDiscovery::class)->registry();
 

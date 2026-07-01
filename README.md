@@ -39,6 +39,23 @@ public function panel(Panel $panel): Panel
 }
 ```
 
+### Query Runner scope
+
+The Database Browser is always limited to model-backed tables. The Query Runner
+defaults to the same, but can be widened to any table on an allowed connection:
+
+```php
+$panel->plugin(
+    DbviewPlugin::make()
+        ->allTables()                                   // query any real table
+        ->denyTables(['password_reset_tokens', 'sessions']), // …except these
+);
+```
+
+`->allTables()` is shorthand for `->queryRunnerScope('connection')`. Read-only
+guards and column redaction still apply to every table. These setters take
+precedence over the `query_runner` values in the config file.
+
 ## Security model (read-only in depth)
 
 Direct database access is guarded on multiple, independent layers — see

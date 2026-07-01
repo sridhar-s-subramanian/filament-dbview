@@ -74,18 +74,52 @@ final class ReadOnlyGuard
     }
 
     /**
-     * Every table the query references (best-effort) must be present in the
-     * registry the given user may view. Deny-unknown.
+     * Every referenced table must be in scope. In the default "models" scope
+     * that means present in the model registry the user may view. In the opt-in
+     * "connection" scope any real table on the connection is allowed (referenced
+     * by its real name; model tables also accept their logical name), except
+     * those on the deny list. Deny-unknown either way.
      */
-    public function assertInScope(SqlAnalyzer $analysis, mixed $user = null): void
+    public function assertInScope(SqlAnalyzer $analysis, mixed $user = null, ?string $connection = null): void
     {
         $registry = $this->discovery->registry()->visibleTo($user);
+        $scope = (string) config('filament-dbview.query_runner.scope', 'models');
+        $deny = array_map('strtolower', (array) config('filament-dbview.query_runner.deny', []));
 
         foreach ($analysis->tables as $table) {
-            if (! $registry->has($table)) {
+            $inModels = $registry->has($table);
+
+            if ($scope === 'connection') {
+                $exists = $inModels || $this->connections->hasTable($connection, $table);
+                $denied = in_array(strtolower($table), $deny, true)
+                    || in_array(strtolower($this->physicalTableName($table, $connection)), $deny, true);
+
+                if (! $exists || $denied) {
+                    throw UnsafeQueryException::tableNotAllowed($table);
+                }
+
+                continue;
+            }
+
+            if (! $inModels) {
                 throw UnsafeQueryException::tableNotAllowed($table);
             }
         }
+    }
+
+    /**
+     * The real (physical) table name for a referenced identifier: model tables
+     * get their connection prefix applied; anything else is already physical.
+     */
+    private function physicalTableName(string $table, ?string $connection): string
+    {
+        $info = $this->discovery->registry()->get($table);
+
+        if ($info !== null) {
+            return $this->connections->connection($info->connection ?? $connection)->getTablePrefix() . $table;
+        }
+
+        return $table;
     }
 
     /**
@@ -98,7 +132,7 @@ final class ReadOnlyGuard
 
         try {
             $analysis = $this->assertSafe($sql);
-            $this->assertInScope($analysis, $user);
+            $this->assertInScope($analysis, $user, $connection);
         } catch (UnsafeQueryException $e) {
             $this->auditor->record($sql, $physical, null, 0.0, false, $e->getMessage());
 

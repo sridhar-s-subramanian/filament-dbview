@@ -30,8 +30,10 @@
         .fdbv-qr-card { overflow: hidden; border-radius: .75rem; background: #fff; border: 1px solid rgba(0,0,0,.06); box-shadow: 0 1px 2px rgba(0,0,0,.05); }
         .dark .fdbv-qr-card { background: rgb(17 24 39); border-color: rgba(255,255,255,.1); }
         .fdbv-qr-card + .fdbv-qr-card { margin-top: 1.25rem; }
-        .fdbv-qr-card-head { padding: .55rem .75rem; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: rgb(107 114 128); border-bottom: 1px solid rgba(0,0,0,.06); }
+        .fdbv-qr-card-head { display: flex; align-items: center; justify-content: space-between; padding: .55rem .75rem; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: rgb(107 114 128); border-bottom: 1px solid rgba(0,0,0,.06); }
         .dark .fdbv-qr-card-head { color: rgb(156 163 175); border-color: rgba(255,255,255,.08); }
+        .fdbv-qr-search { padding: .5rem; border-bottom: 1px solid rgba(0,0,0,.06); }
+        .dark .fdbv-qr-search { border-color: rgba(255,255,255,.08); }
         .fdbv-qr-list { display: flex; flex-direction: column; padding: .375rem; gap: 2px; max-height: 40vh; overflow-y: auto; }
         .fdbv-qr-item { display: block; width: 100%; text-align: left; padding: .4rem .55rem; border-radius: .4rem; color: rgb(55 65 81); cursor: pointer; transition: background-color .15s; }
         .fdbv-qr-item:hover { background: rgb(249 250 251); }
@@ -39,10 +41,27 @@
         .dark .fdbv-qr-item:hover { background: rgba(255,255,255,.05); }
         .fdbv-qr-item .n { display: block; font-size: .8rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .fdbv-qr-item .q { display: block; font-family: ui-monospace, monospace; font-size: .68rem; color: rgb(156 163 175); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .fdbv-qr-tname { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; }
         .fdbv-qr-empty { padding: .75rem; font-size: .78rem; color: rgb(156 163 175); }
     </style>
 
-    <div class="fdbv-qr">
+    <div
+        class="fdbv-qr"
+        x-data="{
+            tq: '',
+            insert(t) {
+                const ta = this.$refs.editor;
+                if (! ta) return;
+                const start = ta.selectionStart ?? ta.value.length;
+                const end = ta.selectionEnd ?? ta.value.length;
+                const before = ta.value.slice(0, start);
+                const needsSpace = before.length && ! /\s$/.test(before);
+                ta.setRangeText((needsSpace ? ' ' : '') + t, start, end, 'end');
+                ta.focus();
+                ta.dispatchEvent(new Event('input'));
+            },
+        }"
+    >
         {{-- Editor + results --}}
         <div class="fdbv-qr-main">
             <div class="fdbv-qr-toolbar">
@@ -73,11 +92,11 @@
 
             <div
                 class="fdbv-qr-editor"
-                x-data
                 x-on:keydown.ctrl.enter.prevent="$wire.run()"
                 x-on:keydown.meta.enter.prevent="$wire.run()"
             >
                 <textarea
+                    x-ref="editor"
                     wire:model="sql"
                     spellcheck="false"
                     placeholder="SELECT * FROM users"
@@ -87,7 +106,7 @@
             </div>
 
             <p class="fdbv-qr-hint">
-                {{ __('Read-only. A single SELECT (or WITH … SELECT) statement, scoped to your models.') }}
+                {{ __('Read-only. A single SELECT (or WITH … SELECT) statement.') }}
             </p>
 
             <div wire:loading.flex wire:target="run" class="fdbv-qr-hint" style="align-items:center; gap:.4rem;">
@@ -109,8 +128,36 @@
             @endif
         </div>
 
-        {{-- Sidebar: saved queries + history --}}
+        {{-- Sidebar --}}
         <aside>
+            @php($allTables = $this->getAllTables())
+
+            @if (! empty($allTables))
+                <div class="fdbv-qr-card">
+                    <div class="fdbv-qr-card-head">
+                        <span>{{ __('Tables') }} ({{ count($allTables) }})</span>
+                    </div>
+                    <div class="fdbv-qr-search">
+                        <x-filament::input.wrapper prefix-icon="heroicon-m-magnifying-glass">
+                            <x-filament::input type="search" placeholder="{{ __('Search tables…') }}" x-model="tq" />
+                        </x-filament::input.wrapper>
+                    </div>
+                    <div class="fdbv-qr-list">
+                        @foreach ($allTables as $t)
+                            <button
+                                type="button"
+                                class="fdbv-qr-item"
+                                x-on:click="insert(@js($t))"
+                                x-show="tq === '' || @js(strtolower($t)).includes(tq.toLowerCase())"
+                                title="{{ __('Insert into query') }}"
+                            >
+                                <span class="fdbv-qr-tname">{{ $t }}</span>
+                            </button>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
             @if (config('filament-dbview.features.saved_queries', true))
                 <div class="fdbv-qr-card">
                     <div class="fdbv-qr-card-head">{{ __('Saved queries') }}</div>

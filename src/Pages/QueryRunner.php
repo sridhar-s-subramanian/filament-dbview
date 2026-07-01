@@ -77,6 +77,30 @@ final class QueryRunner extends Page
         return array_combine($names, $names);
     }
 
+    /**
+     * Real table names on the current connection, shown as a reference list when
+     * the runner is in "connection" scope. Empty in the default "models" scope.
+     *
+     * @return list<string>
+     */
+    public function getAllTables(): array
+    {
+        if (config('filament-dbview.query_runner.scope', 'models') !== 'connection') {
+            return [];
+        }
+
+        $deny = array_map('strtolower', (array) config('filament-dbview.query_runner.deny', []));
+
+        $tables = array_values(array_filter(
+            app(ConnectionResolver::class)->tables($this->connection),
+            static fn(string $table): bool => ! in_array(strtolower($table), $deny, true),
+        ));
+
+        sort($tables);
+
+        return $tables;
+    }
+
     public function run(): void
     {
         $this->reset('error', 'hasRun', 'resultColumns', 'resultRows', 'resultCount', 'resultTruncated', 'resultDurationMs');

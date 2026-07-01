@@ -120,6 +120,41 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Query runner scope
+    |--------------------------------------------------------------------------
+    |
+    | The Database Browser is always limited to model-backed tables. The Query
+    | Runner can optionally be widened to any table that exists on an allowed
+    | connection:
+    |
+    |   'models'     => only model-backed tables (default; safest).
+    |   'connection' => any real table on an allowed connection, referenced by
+    |                   its real (physical) name. Model tables still accept their
+    |                   logical name. Read-only guards and column redaction still
+    |                   apply to every table.
+    |
+    | "deny" lists tables that stay blocked even in 'connection' scope (matched
+    | against both the name typed and the real table name), e.g. framework or
+    | secret tables. Empty by default.
+    |
+    | These are the defaults; they can also be set fluently when registering the
+    | plugin, which takes precedence:
+    |
+    |   DbviewPlugin::make()
+    |       ->allTables()                       // or ->queryRunnerScope('connection')
+    |       ->denyTables(['password_reset_tokens', 'personal_access_tokens']);
+    |
+    */
+
+    'query_runner' => [
+        'scope' => 'models',
+        'deny' => [
+            // 'password_reset_tokens', 'personal_access_tokens', 'sessions', 'migrations',
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Authorization (OWASP A01 — deny by default)
     |--------------------------------------------------------------------------
     |

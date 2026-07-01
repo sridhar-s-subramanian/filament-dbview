@@ -6,6 +6,7 @@ namespace SridharSSubramanian\FilamentDbview\Support;
 
 use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 /**
@@ -15,7 +16,41 @@ use Throwable;
  */
 final class ConnectionResolver
 {
+    /** @var array<string, list<string>> */
+    private array $tableCache = [];
+
     public function __construct(private readonly ModelDiscovery $discovery) {}
+
+    /**
+     * The real (physical) table names present on the given connection. Used by
+     * the query runner's "connection" scope. Memoised per request.
+     *
+     * @return list<string>
+     */
+    public function tables(?string $connection): array
+    {
+        $name = $this->physicalName($connection);
+
+        if (isset($this->tableCache[$name])) {
+            return $this->tableCache[$name];
+        }
+
+        try {
+            $tables = array_map(
+                static fn(array $table): string => (string) $table['name'],
+                Schema::connection($name)->getTables(),
+            );
+        } catch (Throwable) {
+            $tables = [];
+        }
+
+        return $this->tableCache[$name] = $tables;
+    }
+
+    public function hasTable(?string $connection, string $table): bool
+    {
+        return in_array($table, $this->tables($connection), true);
+    }
 
     /**
      * The app connection names the viewer is permitted to query. When

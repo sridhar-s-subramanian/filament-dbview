@@ -18,6 +18,7 @@ use Filament\Tables\Filters\QueryBuilder\Constraints\NumberConstraint;
 use Filament\Tables\Filters\QueryBuilder\Constraints\TextConstraint;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Url;
 use SridharSSubramanian\FilamentDbview\Support\Authorization;
 use SridharSSubramanian\FilamentDbview\Support\DynamicModel;
@@ -65,6 +66,37 @@ final class DatabaseBrowser extends Page implements HasTable
     }
 
     /**
+     * Select a table from the sidebar. Guarded against unknown/forbidden names.
+     */
+    public function selectTable(string $table): void
+    {
+        if (! $this->registry()->has($table)) {
+            return;
+        }
+
+        $this->selectedTable = $table;
+        $this->resetTable();
+    }
+
+    /**
+     * The tables shown in the sidebar navigator, sorted by label.
+     *
+     * @return list<array{table: string, label: string}>
+     */
+    public function getBrowsableTables(): array
+    {
+        $tables = [];
+
+        foreach ($this->registry()->all() as $name => $info) {
+            $tables[] = ['table' => $name, 'label' => $info->label()];
+        }
+
+        usort($tables, static fn(array $a, array $b): int => strcasecmp($a['label'], $b['label']));
+
+        return $tables;
+    }
+
+    /**
      * Filament keys its persisted column-visibility state by page class alone,
      * so a single-page, many-tables browser would share one visible-column set
      * across every table — collapsing to the columns they have in common
@@ -108,16 +140,47 @@ final class DatabaseBrowser extends Page implements HasTable
 
         $constraints = $this->constraintsFor($info);
 
+        $recordActions = [$this->viewAction($info), ...$this->relationshipActions($info)];
+
         return $table
             ->query(fn(): Builder => DynamicModel::for($info)->newQuery())
+            ->heading($info->label())
+            ->description($info->table)
             ->columns($this->columnsFor($info))
             ->filters(
                 $constraints === [] ? [] : [QueryBuilder::make()->constraints($constraints)],
-                layout: FiltersLayout::AboveContentCollapsible,
+                layout: FiltersLayout::Dropdown,
             )
-            ->recordActions($this->relationshipActions($info))
+            ->recordActions($recordActions)
+            // Clicking anywhere on a row opens the full-record detail panel.
+            ->recordAction('view')
             ->paginated([25, 50, 100])
             ->defaultPaginationPageOption(25);
+    }
+
+    /**
+     * Row-click detail: a slide-over panel showing the full record with each
+     * column laid out for readability (JSON pretty-printed). Redaction is
+     * applied so sensitive columns stay masked here too.
+     */
+    private function viewAction(TableInfo $info): Action
+    {
+        $redactor = new Redactor();
+
+        return Action::make('view')
+            ->label(__('View row'))
+            ->icon('heroicon-m-eye')
+            ->color('gray')
+            ->iconButton()
+            ->slideOver()
+            ->modalHeading(fn(mixed $record): string => $info->label() . ' #' . $record->getKey())
+            ->modalDescription($info->table)
+            ->modalSubmitAction(false)
+            ->modalCancelActionLabel(__('Close'))
+            ->modalContent(fn(mixed $record) => view('filament-dbview::components.record-detail', [
+                'columns' => $info->columns,
+                'row' => $redactor->apply($record->getAttributes()),
+            ]));
     }
 
     /**
@@ -160,7 +223,10 @@ final class DatabaseBrowser extends Page implements HasTable
                 ->label($column)
                 ->sortable()
                 ->toggleable()
-                ->wrap()
+                // Keep columns compact: truncate long values so row height and
+                // horizontal scroll stay bounded. Full values are available via
+                // the row detail panel.
+                ->limit(50)
                 // Show NULL explicitly (rather than a blank cell) for null values.
                 ->placeholder('NULL');
 
@@ -169,7 +235,10 @@ final class DatabaseBrowser extends Page implements HasTable
                 $col->formatStateUsing(fn(): string => $redactor->mask())
                     ->searchable(false);
             } else {
-                $col->searchable();
+                $col->searchable()
+                    ->tooltip(fn(mixed $state): ?string => is_string($state) && mb_strlen($state) > 50
+                        ? Str::limit($state, 300)
+                        : null);
             }
 
             return $col;

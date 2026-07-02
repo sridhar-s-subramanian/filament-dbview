@@ -267,6 +267,28 @@ final class QueryRunner extends Page
             ->get();
     }
 
+    public function viewRowAction(): Action
+    {
+        return Action::make('viewRow')
+            ->slideOver()
+            ->modalHeading(fn (array $arguments): string => __('Row #') . ((int) ($arguments['index'] ?? 0) + 1))
+            ->modalSubmitAction(false)
+            ->modalCancelActionLabel(__('Close'))
+            ->modalContent(function (array $arguments) {
+                $index = (int) ($arguments['index'] ?? 0);
+                $row = $this->resultRows[$index] ?? null;
+
+                if ($row === null) {
+                    return null;
+                }
+
+                return view('filament-dbview::components.record-detail', [
+                    'columns' => array_keys($row),
+                    'row' => $row,
+                ]);
+            });
+    }
+
     public function getTitle(): string
     {
         return __('Query Runner');

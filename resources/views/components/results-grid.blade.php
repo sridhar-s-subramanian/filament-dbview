@@ -38,6 +38,7 @@
     .dark .fdbv-rg-table td { color: rgb(209 213 219); border-color: rgba(255,255,255,.06); }
     .fdbv-rg-table tr:hover td { background: rgba(0,0,0,.02); }
     .dark .fdbv-rg-table tr:hover td { background: rgba(255,255,255,.03); }
+    .fdbv-rg-clickable { cursor: pointer; }
     .fdbv-rg-null { color: rgb(156 163 175); font-style: italic; }
     .fdbv-rg-bool { color: rgb(147 51 234); }
     .dark .fdbv-rg-bool { color: rgb(192 132 252); }
@@ -69,8 +70,13 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach ($rows as $row)
-                        <tr>
+                    @foreach ($rows as $index => $row)
+                        <tr
+                            @if (method_exists($this, 'viewRowAction'))
+                                class="fdbv-rg-clickable"
+                                wire:click="mountAction('viewRow', { index: {{ $index }} })"
+                            @endif
+                        >
                             @foreach ($columns as $column)
                                 @php([$text, $cls] = $render($row[$column] ?? null))
                                 <td class="{{ $cls }}" title="{{ \Illuminate\Support\Str::limit($text, 500) }}">{{ \Illuminate\Support\Str::limit($text, 160) }}</td>

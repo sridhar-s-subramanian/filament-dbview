@@ -108,18 +108,16 @@ final class ReadOnlyGuard
     }
 
     /**
-     * The real (physical) table name for a referenced identifier: model tables
-     * get their connection prefix applied; anything else is already physical.
+     * The real (physical) table name for a referenced identifier. Laravel's
+     * schema tools operate in logical (unprefixed) space, so every table on a
+     * prefixed connection is physically prefixed — model-backed or not. Model
+     * tables use their own connection; others use the query's connection.
      */
     private function physicalTableName(string $table, ?string $connection): string
     {
         $info = $this->discovery->registry()->get($table);
 
-        if ($info !== null) {
-            return $this->connections->connection($info->connection ?? $connection)->getTablePrefix() . $table;
-        }
-
-        return $table;
+        return $this->connections->physicalTableName($info->connection ?? $connection, $table);
     }
 
     /**
@@ -166,27 +164,20 @@ final class ReadOnlyGuard
 
     /**
      * Replace referenced logical table names with their real (prefixed) names.
-     * Only identifiers appearing after FROM/JOIN or as a `table.` qualifier are
-     * rewritten, so string literals and column names are left untouched.
+     * Laravel's schema layer is prefix-transparent, so raw execution must prefix
+     * every referenced table — model-backed or not. Only identifiers after
+     * FROM/JOIN or as a `table.` qualifier are rewritten, so string literals and
+     * column names are left untouched.
      */
     private function applyTablePrefixes(string $sql, SqlAnalyzer $analysis, ?string $connection): string
     {
-        $registry = $this->discovery->registry();
-
         foreach ($analysis->tables as $logical) {
-            $info = $registry->get($logical);
+            $physical = $this->physicalTableName($logical, $connection);
 
-            if ($info === null) {
+            if ($physical === $logical) {
                 continue;
             }
 
-            $prefix = $this->connections->connection($info->connection ?? $connection)->getTablePrefix();
-
-            if ($prefix === '') {
-                continue;
-            }
-
-            $physical = $prefix . $logical;
             $quoted = preg_quote($logical, '/');
 
             // `FROM logical` / `JOIN logical` (optionally back-ticked).

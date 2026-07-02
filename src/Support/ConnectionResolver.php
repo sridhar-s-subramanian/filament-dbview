@@ -19,11 +19,16 @@ final class ConnectionResolver
     /** @var array<string, list<string>> */
     private array $tableCache = [];
 
+    /** @var array<string, array<string, string>> */
+    private array $logicalToPhysicalCache = [];
+
     public function __construct(private readonly ModelDiscovery $discovery) {}
 
     /**
-     * The real (physical) table names present on the given connection. Used by
-     * the query runner's "connection" scope. Memoised per request.
+     * The logical (unprefixed) table names on the given connection, used for the
+     * query runner's "connection" scope table list. getTables() is prefix-
+     * inconsistent across drivers (MySQL strips the prefix, SQLite does not), so
+     * we normalise by stripping the connection prefix ourselves. Memoised.
      *
      * @return list<string>
      */
@@ -36,20 +41,70 @@ final class ConnectionResolver
         }
 
         try {
-            $tables = array_map(
-                static fn(array $table): string => (string) $table['name'],
-                Schema::connection($name)->getTables(),
-            );
+            $prefix = DB::connection($name)->getTablePrefix();
+            $rawTables = Schema::connection($name)->getTables();
+
+            $tables = [];
+            $mapping = [];
+
+            foreach ($rawTables as $table) {
+                $raw = (string) $table['name'];
+                $logical = ($prefix !== '' && str_starts_with($raw, $prefix))
+                    ? substr($raw, strlen($prefix))
+                    : $raw;
+
+                $tables[] = $logical;
+                $mapping[strtolower($logical)] = $raw;
+            }
+
+            $this->logicalToPhysicalCache[$name] = $mapping;
         } catch (Throwable) {
             $tables = [];
+            $this->logicalToPhysicalCache[$name] = [];
         }
 
         return $this->tableCache[$name] = $tables;
     }
 
+    /**
+     * Map a logical table name to its physical table name on the connection.
+     */
+    public function physicalTableName(?string $connection, string $table): string
+    {
+        $name = $this->physicalName($connection);
+
+        // Ensure tables() has been called to populate cache.
+        $this->tables($connection);
+
+        $mapping = $this->logicalToPhysicalCache[$name] ?? [];
+        $lowerTable = strtolower($table);
+
+        if (isset($mapping[$lowerTable])) {
+            return $mapping[$lowerTable];
+        }
+
+        // Fallback: if not found in physical tables list, default to prepending connection prefix.
+        try {
+            $prefix = DB::connection($name)->getTablePrefix();
+        } catch (Throwable) {
+            $prefix = '';
+        }
+
+        return $prefix . $table;
+    }
+
+    /**
+     * Whether a logical table name exists on the connection. Checks the memoised
+     * list of logical tables resolved from the physical schema, ensuring prefix-resilience.
+     */
     public function hasTable(?string $connection, string $table): bool
     {
-        return in_array($table, $this->tables($connection), true);
+        $name = $this->physicalName($connection);
+
+        // Ensure tables() has been called to populate cache.
+        $this->tables($connection);
+
+        return isset($this->logicalToPhysicalCache[$name][strtolower($table)]);
     }
 
     /**

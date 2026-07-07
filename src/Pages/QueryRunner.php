@@ -11,6 +11,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Livewire\Attributes\Url;
 use SridharSSubramanian\FilamentDbview\Exceptions\UnsafeQueryException;
 use SridharSSubramanian\FilamentDbview\Exports\ResultExporter;
 use SridharSSubramanian\FilamentDbview\Models\DbviewQueryHistory;
@@ -42,6 +43,14 @@ final class QueryRunner extends Page
 
     public ?int $rowLimit = null;
 
+    // Cross-link entry points from the Database Browser: prefill a SELECT for a
+    // table, or open its structure. Bound to ?table= / ?structure=.
+    #[Url(as: 'table')]
+    public ?string $prefillTable = null;
+
+    #[Url(as: 'structure')]
+    public ?string $prefillStructure = null;
+
     public bool $hasRun = false;
 
     public bool $isExplain = false;
@@ -69,6 +78,19 @@ final class QueryRunner extends Page
     {
         $this->connection ??= app(ConnectionResolver::class)->allowed()[0] ?? (string) config('database.default');
         $this->rowLimit ??= (int) config('filament-dbview.limits.default_rows', 100);
+
+        // Cross-link from the Database Browser: ?table= prefills a SELECT (and
+        // adopts the table's connection); ?structure= opens the structure view.
+        if ($this->prefillTable !== null && $this->prefillTable !== '') {
+            $info = app(ModelDiscovery::class)->registry()->visibleTo(Auth::user())->get($this->prefillTable);
+
+            if ($info !== null) {
+                $this->connection = $info->connection ?? $this->connection;
+                $this->sql ??= 'SELECT * FROM ' . $this->prefillTable;
+            }
+        } elseif ($this->prefillStructure !== null && $this->prefillStructure !== '') {
+            $this->showStructure($this->prefillStructure);
+        }
     }
 
     public static function canAccess(): bool
@@ -111,6 +133,17 @@ final class QueryRunner extends Page
         sort($tables);
 
         return $tables;
+    }
+
+    /**
+     * Model-backed tables the Database Browser can display — used by the sidebar
+     * to decide which rows get a "Browse" cross-link.
+     *
+     * @return list<string>
+     */
+    public function getBrowsableTableNames(): array
+    {
+        return app(ModelDiscovery::class)->registry()->visibleTo(Auth::user())->tableNames();
     }
 
     /**

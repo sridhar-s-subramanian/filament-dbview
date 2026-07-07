@@ -78,3 +78,51 @@ it('lists model-backed tables in the sidebar', function (): void {
 
     expect($tables)->toContain('posts', 'users');
 });
+
+it('lists browsable (model-backed) tables', function (): void {
+    $tables = (new QueryRunner())->getBrowsableTableNames();
+
+    expect($tables)->toContain('posts', 'users')
+        ->and($tables)->not->toContain('dbview_query_history');
+});
+
+it('prefills a SELECT from the ?table cross-link', function (): void {
+    $page = new QueryRunner();
+    $page->prefillTable = 'posts';
+
+    $page->mount();
+
+    expect($page->sql)->toBe('SELECT * FROM posts')
+        ->and($page->isStructure)->toBeFalse();
+});
+
+it('does not overwrite existing SQL when prefilling a table', function (): void {
+    $page = new QueryRunner();
+    $page->prefillTable = 'posts';
+    $page->sql = 'select 1';
+
+    $page->mount();
+
+    expect($page->sql)->toBe('select 1');
+});
+
+it('opens the structure view from the ?structure cross-link', function (): void {
+    $page = new QueryRunner();
+    $page->prefillStructure = 'posts';
+
+    $page->mount();
+
+    expect($page->isStructure)->toBeTrue()
+        ->and($page->structure['table'])->toBe('posts')
+        ->and($page->sql)->toBeNull();
+});
+
+it('ignores an out-of-scope prefill table', function (): void {
+    $page = new QueryRunner();
+    $page->prefillTable = 'dbview_query_history';
+
+    $page->mount();
+
+    expect($page->sql)->toBeNull()
+        ->and($page->isStructure)->toBeFalse();
+});

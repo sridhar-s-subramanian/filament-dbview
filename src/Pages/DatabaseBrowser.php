@@ -79,6 +79,40 @@ final class DatabaseBrowser extends Page implements HasTable
     }
 
     /**
+     * Cross-links to the Query Runner for the current table: "Query" prefills a
+     * SELECT, "Structure" opens its structure view. Hidden when no table is
+     * selected or the Query Runner is disabled/forbidden.
+     *
+     * @return array<int, Action>
+     */
+    protected function getHeaderActions(): array
+    {
+        $runnerAvailable = $this->selectedTable !== null
+            && config('filament-dbview.features.query_runner', true)
+            && QueryRunner::canAccess();
+
+        $actions = [
+            Action::make('query')
+                ->label(__('Query'))
+                ->icon('heroicon-m-command-line')
+                ->color('gray')
+                ->visible(fn(): bool => $runnerAvailable)
+                ->url(fn(): string => QueryRunner::getUrl() . '?table=' . urlencode((string) $this->selectedTable)),
+        ];
+
+        if (config('filament-dbview.features.structure', true)) {
+            $actions[] = Action::make('structure')
+                ->label(__('Structure'))
+                ->icon('heroicon-m-table-cells')
+                ->color('gray')
+                ->visible(fn(): bool => $runnerAvailable)
+                ->url(fn(): string => QueryRunner::getUrl() . '?structure=' . urlencode((string) $this->selectedTable));
+        }
+
+        return $actions;
+    }
+
+    /**
      * The tables shown in the sidebar navigator, sorted by label.
      *
      * @return list<array{table: string, label: string}>

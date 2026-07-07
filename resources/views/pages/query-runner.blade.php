@@ -45,6 +45,10 @@
         .fdbv-qr-struct:hover { background: rgb(243 244 246); color: rgb(55 65 81); }
         .dark .fdbv-qr-struct:hover { background: rgba(255,255,255,.08); color: rgb(229 231 235); }
         .fdbv-qr-struct-icon { width: .85rem; height: .85rem; }
+        .fdbv-qr-browse { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; padding: 0 .4rem; border-radius: .4rem; color: rgb(156 163 175); transition: background-color .15s, color .15s; }
+        .fdbv-qr-browse:hover { background: rgb(243 244 246); color: rgb(55 65 81); }
+        .dark .fdbv-qr-browse:hover { background: rgba(255,255,255,.08); color: rgb(229 231 235); }
+        .fdbv-qr-browse-icon { width: .8rem; height: .8rem; }
         .fdbv-qr-item .n { display: block; font-size: .8rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .fdbv-qr-item .q { display: block; font-family: ui-monospace, monospace; font-size: .68rem; color: rgb(156 163 175); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .fdbv-qr-tname { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; }
@@ -159,6 +163,8 @@
         {{-- Sidebar --}}
         <aside>
             @php($allTables = $this->getAllTables())
+            @php($browsable = array_flip($this->getBrowsableTableNames()))
+            @php($canBrowse = \SridharSSubramanian\FilamentDbview\Pages\DatabaseBrowser::canAccess())
 
             @if (! empty($allTables))
                 <div class="fdbv-qr-card">
@@ -196,6 +202,16 @@
                                 >
                                     <span class="fdbv-qr-tname">{{ $t }}</span>
                                 </button>
+
+                                @if ($canBrowse && isset($browsable[$t]))
+                                    <a
+                                        class="fdbv-qr-browse"
+                                        href="{{ \SridharSSubramanian\FilamentDbview\Pages\DatabaseBrowser::getUrl() }}?table={{ urlencode($t) }}"
+                                        title="{{ __('Browse in Database Browser') }}"
+                                    >
+                                        @svg('heroicon-m-arrow-top-right-on-square', 'fdbv-qr-browse-icon')
+                                    </a>
+                                @endif
                             </div>
                         @endforeach
                     </div>

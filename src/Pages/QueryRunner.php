@@ -17,10 +17,10 @@ use SridharSSubramanian\FilamentDbview\Models\DbviewQueryHistory;
 use SridharSSubramanian\FilamentDbview\Models\DbviewSavedQuery;
 use SridharSSubramanian\FilamentDbview\Support\Authorization;
 use SridharSSubramanian\FilamentDbview\Support\ConnectionResolver;
+use SridharSSubramanian\FilamentDbview\Support\ModelDiscovery;
 use SridharSSubramanian\FilamentDbview\Support\ReadOnlyGuard;
 use SridharSSubramanian\FilamentDbview\Support\ResultSet;
 use SridharSSubramanian\FilamentDbview\Support\SchemaInspector;
-use SridharSSubramanian\FilamentDbview\Support\SqlAnalyzer;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 use UnitEnum;
@@ -47,6 +47,11 @@ final class QueryRunner extends Page
     public bool $isExplain = false;
 
     public ?string $error = null;
+
+    public bool $isStructure = false;
+
+    /** @var array{table: string, label: string, columns: list<array<string, mixed>>, indexes: list<array<string, mixed>>, foreignKeys: list<array<string, mixed>>}|array{} */
+    public array $structure = [];
 
     /** @var list<string> */
     public array $resultColumns = [];
@@ -82,52 +87,61 @@ final class QueryRunner extends Page
     }
 
     /**
-     * Real table names on the current connection, shown as a reference list when
-     * the runner is in "connection" scope. Empty in the default "models" scope.
+     * Tables listed in the sidebar for reference: model-backed tables always,
+     * plus every real table on the connection when in "connection" scope (minus
+     * the deny list). Clicking a name inserts it into the editor; the row's
+     * structure icon opens its schema.
      *
      * @return list<string>
      */
     public function getAllTables(): array
     {
-        if (config('filament-dbview.query_runner.scope', 'models') !== 'connection') {
-            return [];
+        $tables = app(ModelDiscovery::class)->registry()->visibleTo(Auth::user())->tableNames();
+
+        if (config('filament-dbview.query_runner.scope', 'models') === 'connection') {
+            $deny = array_map('strtolower', (array) config('filament-dbview.query_runner.deny', []));
+
+            $tables = array_merge($tables, array_filter(
+                app(ConnectionResolver::class)->tables($this->connection),
+                static fn(string $table): bool => ! in_array(strtolower($table), $deny, true),
+            ));
         }
 
-        $deny = array_map('strtolower', (array) config('filament-dbview.query_runner.deny', []));
-
-        $tables = array_values(array_filter(
-            app(ConnectionResolver::class)->tables($this->connection),
-            static fn(string $table): bool => ! in_array(strtolower($table), $deny, true),
-        ));
-
+        $tables = array_values(array_unique($tables));
         sort($tables);
 
         return $tables;
     }
 
     /**
-     * Indexes + foreign keys of the tables referenced by the last successful
-     * (non-EXPLAIN) query, for the Adminer-style schema panel under the results.
-     *
-     * @return list<array{table: string, label: string, indexes: list<array{name: string, columns: list<string>, unique: bool, primary: bool}>, foreignKeys: list<array{columns: list<string>, foreign_table: string, foreign_columns: list<string>, on_delete: string|null, on_update: string|null}>}>
+     * Adminer-style "Show structure" for a sidebar table: introspect its columns,
+     * indexes and foreign keys. Executes no query — pure, scope-checked schema
+     * introspection — and switches the main pane to the structure view.
      */
-    public function getResultSchema(): array
+    public function showStructure(string $table): void
     {
-        if (! config('filament-dbview.features.result_schema', true)) {
-            return [];
+        if (! config('filament-dbview.features.structure', true)) {
+            return;
         }
 
-        if (! $this->hasRun || $this->error !== null || $this->isExplain || $this->sql === null) {
-            return [];
+        $this->reset('error', 'hasRun', 'isExplain', 'isStructure', 'structure', 'resultColumns', 'resultRows', 'resultCount', 'resultTruncated', 'resultDurationMs');
+
+        $table = trim($table);
+
+        if ($table === '') {
+            return;
         }
 
-        $tables = SqlAnalyzer::of((string) $this->sql)->tables;
+        $structure = app(SchemaInspector::class)->for([$table], $this->connection, Auth::user());
 
-        if ($tables === []) {
-            return [];
+        if ($structure === []) {
+            $this->error = __('Structure is not available for this table.');
+
+            return;
         }
 
-        return app(SchemaInspector::class)->for($tables, $this->connection, Auth::user());
+        $this->structure = $structure[0];
+        $this->isStructure = true;
     }
 
     public function run(): void
@@ -188,7 +202,7 @@ final class QueryRunner extends Page
      */
     private function dispatchQuery(\Closure $runner, bool $isExplain): void
     {
-        $this->reset('error', 'hasRun', 'isExplain', 'resultColumns', 'resultRows', 'resultCount', 'resultTruncated', 'resultDurationMs');
+        $this->reset('error', 'hasRun', 'isExplain', 'isStructure', 'structure', 'resultColumns', 'resultRows', 'resultCount', 'resultTruncated', 'resultDurationMs');
 
         try {
             $result = $runner(app(ReadOnlyGuard::class));

@@ -39,6 +39,12 @@
         .fdbv-qr-item:hover { background: rgb(249 250 251); }
         .dark .fdbv-qr-item { color: rgb(209 213 219); }
         .dark .fdbv-qr-item:hover { background: rgba(255,255,255,.05); }
+        .fdbv-qr-row { display: flex; align-items: stretch; gap: 2px; }
+        .fdbv-qr-row .fdbv-qr-item { flex: 1 1 auto; min-width: 0; }
+        .fdbv-qr-struct { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; padding: 0 .4rem; border-radius: .4rem; color: rgb(156 163 175); cursor: pointer; transition: background-color .15s, color .15s; }
+        .fdbv-qr-struct:hover { background: rgb(243 244 246); color: rgb(55 65 81); }
+        .dark .fdbv-qr-struct:hover { background: rgba(255,255,255,.08); color: rgb(229 231 235); }
+        .fdbv-qr-struct-icon { width: .85rem; height: .85rem; }
         .fdbv-qr-item .n { display: block; font-size: .8rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .fdbv-qr-item .q { display: block; font-family: ui-monospace, monospace; font-size: .68rem; color: rgb(156 163 175); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .fdbv-qr-tname { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; }
@@ -127,7 +133,9 @@
                 <div class="fdbv-qr-error">{{ $error }}</div>
             @endif
 
-            @if ($hasRun && ! $error)
+            @if ($isStructure)
+                @include('filament-dbview::components.structure', ['structure' => $structure])
+            @elseif ($hasRun && ! $error)
                 @if ($isExplain)
                     @include('filament-dbview::components.explain-plan', [
                         'columns' => $resultColumns,
@@ -144,11 +152,6 @@
                         'count' => $resultCount,
                         'duration' => $resultDurationMs,
                     ])
-
-                    @php($resultSchema = $this->getResultSchema())
-                    @if (! empty($resultSchema))
-                        @include('filament-dbview::components.result-schema', ['schema' => $resultSchema])
-                    @endif
                 @endif
             @endif
         </div>
@@ -169,15 +172,31 @@
                     </div>
                     <div class="fdbv-qr-list">
                         @foreach ($allTables as $t)
-                            <button
-                                type="button"
-                                class="fdbv-qr-item"
-                                x-on:click="insert(@js($t))"
+                            <div
+                                class="fdbv-qr-row"
                                 x-show="tq === '' || @js(strtolower($t)).includes(tq.toLowerCase())"
-                                title="{{ __('Insert into query') }}"
                             >
-                                <span class="fdbv-qr-tname">{{ $t }}</span>
-                            </button>
+                                @if (config('filament-dbview.features.structure', true))
+                                    <button
+                                        type="button"
+                                        class="fdbv-qr-struct"
+                                        wire:click="showStructure('{{ $t }}')"
+                                        wire:loading.attr="disabled"
+                                        title="{{ __('Show structure') }}"
+                                    >
+                                        @svg('heroicon-m-table-cells', 'fdbv-qr-struct-icon')
+                                    </button>
+                                @endif
+
+                                <button
+                                    type="button"
+                                    class="fdbv-qr-item"
+                                    x-on:click="insert(@js($t))"
+                                    title="{{ __('Insert into query') }}"
+                                >
+                                    <span class="fdbv-qr-tname">{{ $t }}</span>
+                                </button>
+                            </div>
                         @endforeach
                     </div>
                 </div>

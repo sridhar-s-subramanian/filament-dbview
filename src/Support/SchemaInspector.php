@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace SridharSSubramanian\FilamentDbview\Support;
 
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Database\Connection;
 use Throwable;
 
 /**
- * Introspects the indexes and foreign keys of the tables referenced by a query,
- * for the Adminer-style schema panel shown under the Query Runner results.
+ * Introspects the columns, indexes and foreign keys of a table for the
+ * Adminer-style "Show structure" view in the Query Runner.
  *
  * Introspection is live (not the cached registry) so it covers both model-backed
  * and connection-scope tables uniformly and captures composite keys / constraint
@@ -17,9 +17,10 @@ use Throwable;
  * describes tables that are in scope for the current user — the same scope rules
  * the {@see ReadOnlyGuard} enforces — so it can never reveal a denied table.
  *
+ * @phpstan-type ColumnInfo array{name: string, type: string, nullable: bool, default: string|null, auto_increment: bool, primary: bool}
  * @phpstan-type IndexInfo array{name: string, columns: list<string>, unique: bool, primary: bool}
  * @phpstan-type ForeignKeyInfo array{columns: list<string>, foreign_table: string, foreign_columns: list<string>, on_delete: string|null, on_update: string|null}
- * @phpstan-type TableSchema array{table: string, label: string, indexes: list<IndexInfo>, foreignKeys: list<ForeignKeyInfo>}
+ * @phpstan-type TableSchema array{table: string, label: string, columns: list<ColumnInfo>, indexes: list<IndexInfo>, foreignKeys: list<ForeignKeyInfo>}
  */
 final class SchemaInspector
 {
@@ -29,7 +30,7 @@ final class SchemaInspector
     ) {}
 
     /**
-     * Describe every in-scope table in $tableNames (indexes + foreign keys).
+     * Describe every in-scope table in $tableNames (columns, indexes, FKs).
      *
      * @param  list<string>  $tableNames  logical table names (as parsed from SQL)
      * @return list<TableSchema>
@@ -72,18 +73,14 @@ final class SchemaInspector
                 continue;
             }
 
-            // Schema builder methods (getIndexes/getForeignKeys) prepend the
-            // connection's table prefix themselves, so they take the LOGICAL
-            // (unprefixed) table name on its own connection — exactly as
-            // ModelDiscovery does. Passing an already-prefixed name would
-            // double-prefix and silently match nothing.
             $logicalTable = $inModels ? $info->table : $table;
+            $dbConnection = $this->connections->connection($tableConnection);
+            $physicalTable = $this->connections->physicalTableName($tableConnection, $logicalTable);
 
             $schemas[] = [
                 'table' => $table,
                 'label' => $inModels ? $info->label() : $table,
-                'indexes' => $this->indexesFor($tableConnection, $logicalTable),
-                'foreignKeys' => $this->foreignKeysFor($tableConnection, $logicalTable),
+                ...$this->describe($dbConnection, $physicalTable),
             ];
         }
 
@@ -91,12 +88,93 @@ final class SchemaInspector
     }
 
     /**
-     * @return list<array{name: string, columns: list<string>, unique: bool, primary: bool}>
+     * Introspect a table by its PHYSICAL name with the connection prefix
+     * temporarily cleared. Laravel's schema builder always prepends the
+     * connection prefix, which is wrong for databases that mix prefixed and
+     * non-prefixed tables (the physical name already encodes the prefix, if
+     * any). The prefix is always restored.
+     *
+     * @return array{columns: list<ColumnInfo>, indexes: list<IndexInfo>, foreignKeys: list<ForeignKeyInfo>}
      */
-    private function indexesFor(?string $connection, string $table): array
+    private function describe(Connection $connection, string $table): array
+    {
+        $prefix = $connection->getTablePrefix();
+        $connection->setTablePrefix('');
+
+        try {
+            $indexes = $this->indexesFor($connection, $table);
+
+            return [
+                'columns' => $this->columnsFor($connection, $table, $this->primaryColumns($indexes)),
+                'indexes' => $indexes,
+                'foreignKeys' => $this->foreignKeysFor($connection, $table),
+            ];
+        } finally {
+            $connection->setTablePrefix($prefix);
+        }
+    }
+
+    /**
+     * The set (lower-cased) of columns that make up the table's primary key,
+     * derived from the introspected indexes.
+     *
+     * @param  list<array{name: string, columns: list<string>, unique: bool, primary: bool}>  $indexes
+     * @return array<string, true>
+     */
+    private function primaryColumns(array $indexes): array
+    {
+        $primary = [];
+
+        foreach ($indexes as $index) {
+            if (! $index['primary']) {
+                continue;
+            }
+
+            foreach ($index['columns'] as $column) {
+                $primary[strtolower($column)] = true;
+            }
+        }
+
+        return $primary;
+    }
+
+    /**
+     * @param  array<string, true>  $primaryColumns
+     * @return list<array{name: string, type: string, nullable: bool, default: string|null, auto_increment: bool, primary: bool}>
+     */
+    private function columnsFor(Connection $connection, string $table, array $primaryColumns): array
     {
         try {
-            $raw = Schema::connection($connection)->getIndexes($table);
+            $raw = $connection->getSchemaBuilder()->getColumns($table);
+        } catch (Throwable) {
+            return [];
+        }
+
+        $columns = [];
+
+        foreach ($raw as $column) {
+            $name = (string) $column['name'];
+
+            $columns[] = [
+                'name' => $name,
+                'type' => (string) $column['type'],
+                'nullable' => (bool) $column['nullable'],
+                'default' => $column['default'] !== null ? (string) $column['default'] : null,
+                'auto_increment' => $column['auto_increment'],
+                'primary' => isset($primaryColumns[strtolower($name)]),
+            ];
+        }
+
+        return $columns;
+    }
+
+    /**
+     * @return list<array{name: string, columns: list<string>, unique: bool, primary: bool}>
+     */
+    private function indexesFor(Connection $connection, string $table): array
+    {
+        try {
+            $raw = $connection->getSchemaBuilder()->getIndexes($table);
         } catch (Throwable) {
             return [];
         }
@@ -118,10 +196,10 @@ final class SchemaInspector
     /**
      * @return list<array{columns: list<string>, foreign_table: string, foreign_columns: list<string>, on_delete: string|null, on_update: string|null}>
      */
-    private function foreignKeysFor(?string $connection, string $table): array
+    private function foreignKeysFor(Connection $connection, string $table): array
     {
         try {
-            $raw = Schema::connection($connection)->getForeignKeys($table);
+            $raw = $connection->getSchemaBuilder()->getForeignKeys($table);
         } catch (Throwable) {
             return [];
         }

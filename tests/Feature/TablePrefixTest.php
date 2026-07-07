@@ -82,10 +82,10 @@ it('allows querying non-prefixed tables on a prefixed connection in connection s
         ->and($result->rows[0]['info'])->toBe('Legacy');
 });
 
-it('introspects schema on a prefixed table by its logical name', function (): void {
-    // getIndexes()/getForeignKeys() add the connection prefix themselves, so the
-    // inspector must pass the logical name (widgets), not the physical
-    // pfx_widgets — otherwise it double-prefixes and finds nothing.
+it('introspects schema on a prefixed table', function (): void {
+    // The inspector resolves `widgets` to its physical name pfx_widgets and
+    // introspects it with the connection prefix cleared, so the physical name is
+    // used verbatim (no double-prefixing).
     $schema = app(\SridharSSubramanian\FilamentDbview\Support\SchemaInspector::class)
         ->for(['widgets'], 'prefixed', null);
 
@@ -99,4 +99,21 @@ it('introspects schema on a prefixed table by its logical name', function (): vo
 
     expect($primaries)->not->toBeEmpty()
         ->and($primaries[0]['columns'])->toBe(['id']);
+});
+
+it('introspects a non-prefixed table on a prefixed connection', function (): void {
+    // Mixed-prefix database: `legacy_data` is a real table WITHOUT the cms_/pfx_
+    // prefix on a prefixed connection. Schema builders always prepend the prefix,
+    // so the inspector must introspect the physical name with the prefix cleared.
+    config()->set('filament-dbview.query_runner.scope', 'connection');
+
+    $schema = app(\SridharSSubramanian\FilamentDbview\Support\SchemaInspector::class)
+        ->for(['legacy_data'], 'prefixed', null);
+
+    expect($schema)->toHaveCount(1)
+        ->and($schema[0]['table'])->toBe('legacy_data');
+
+    $names = array_map(static fn(array $c): string => $c['name'], $schema[0]['columns']);
+
+    expect($names)->toContain('id', 'info');
 });

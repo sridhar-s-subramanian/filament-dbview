@@ -14,50 +14,67 @@ it('defines viewRowAction as a slide-over modal action', function (): void {
         ->and($action->getName())->toBe('viewRow');
 });
 
-/**
- * Build a QueryRunner in a "just ran this SQL" state for exercising the
- * result-schema accessor gating.
- */
-function ranRunner(string $sql): QueryRunner
-{
+it('shows the structure of a table', function (): void {
     $page = new QueryRunner();
-    $page->sql = $sql;
+
+    $page->showStructure('posts');
+
+    expect($page->isStructure)->toBeTrue()
+        ->and($page->error)->toBeNull()
+        ->and($page->structure['table'])->toBe('posts')
+        ->and($page->structure['columns'])->not->toBe([])
+        ->and($page->structure['foreignKeys'][0]['foreign_table'])->toBe('users');
+
+    $columns = array_map(static fn(array $c): string => $c['name'], $page->structure['columns']);
+    expect($columns)->toContain('user_id');
+});
+
+it('errors and shows no structure for an out-of-scope table', function (): void {
+    $page = new QueryRunner();
+
+    $page->showStructure('dbview_query_history');
+
+    expect($page->isStructure)->toBeFalse()
+        ->and($page->structure)->toBe([])
+        ->and($page->error)->not->toBeNull();
+});
+
+it('does nothing when the table name is empty', function (): void {
+    $page = new QueryRunner();
+
+    $page->showStructure('');
+
+    expect($page->isStructure)->toBeFalse()
+        ->and($page->structure)->toBe([]);
+});
+
+it('does not show structure when the feature is disabled', function (): void {
+    config()->set('filament-dbview.features.structure', false);
+
+    $page = new QueryRunner();
+
+    $page->showStructure('posts');
+
+    expect($page->isStructure)->toBeFalse();
+});
+
+it('clears prior query results when showing structure', function (): void {
+    $page = new QueryRunner();
     $page->hasRun = true;
-
-    return $page;
-}
-
-it('exposes the referenced tables schema after a successful run', function (): void {
-    $schema = ranRunner('select * from posts')->getResultSchema();
-
-    expect($schema)->toHaveCount(1)
-        ->and($schema[0]['table'])->toBe('posts')
-        ->and($schema[0]['foreignKeys'][0]['foreign_table'])->toBe('users');
-});
-
-it('does not expose schema for explain results', function (): void {
-    $page = ranRunner('select * from posts');
     $page->isExplain = true;
+    $page->resultRows = [['id' => 1]];
+    $page->resultColumns = ['id'];
 
-    expect($page->getResultSchema())->toBe([]);
+    $page->showStructure('posts');
+
+    expect($page->isStructure)->toBeTrue()
+        ->and($page->hasRun)->toBeFalse()
+        ->and($page->isExplain)->toBeFalse()
+        ->and($page->resultRows)->toBe([]);
 });
 
-it('does not expose schema when the run errored', function (): void {
-    $page = ranRunner('select * from posts');
-    $page->error = 'boom';
+it('lists model-backed tables in the sidebar', function (): void {
+    $tables = (new QueryRunner())->getAllTables();
 
-    expect($page->getResultSchema())->toBe([]);
-});
-
-it('does not expose schema before any run', function (): void {
-    $page = new QueryRunner();
-    $page->sql = 'select * from posts';
-
-    expect($page->getResultSchema())->toBe([]);
-});
-
-it('does not expose schema when the feature is disabled', function (): void {
-    config()->set('filament-dbview.features.result_schema', false);
-
-    expect(ranRunner('select * from posts')->getResultSchema())->toBe([]);
+    expect($tables)->toContain('posts', 'users');
 });

@@ -24,6 +24,20 @@ it('returns foreign keys for a referenced model table', function (): void {
         ->and($posts['foreignKeys'][0]['foreign_columns'])->toBe(['id']);
 });
 
+it('returns columns with types and a primary flag', function (): void {
+    $columns = inspector()->for(['posts'])[0]['columns'];
+
+    $names = array_map(static fn(array $c): string => $c['name'], $columns);
+
+    expect($names)->toContain('id', 'user_id', 'title', 'body');
+
+    $byName = collect($columns)->keyBy('name');
+
+    expect($byName['id']['primary'])->toBeTrue()
+        ->and($byName['user_id']['primary'])->toBeFalse()
+        ->and($byName['id']['type'])->not->toBe('');
+});
+
 it('returns indexes including the primary key', function (): void {
     $schema = inspector()->for(['posts']);
 

@@ -112,6 +112,7 @@ return [
 
     'features' => [
         'query_runner' => true,
+        'explain' => true,
         'export' => true,
         'history' => true,
         'saved_queries' => true,

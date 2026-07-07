@@ -42,6 +42,8 @@ final class QueryRunner extends Page
 
     public bool $hasRun = false;
 
+    public bool $isExplain = false;
+
     public ?string $error = null;
 
     /** @var list<string> */
@@ -103,21 +105,75 @@ final class QueryRunner extends Page
 
     public function run(): void
     {
-        $this->reset('error', 'hasRun', 'resultColumns', 'resultRows', 'resultCount', 'resultTruncated', 'resultDurationMs');
-
-        try {
-            $result = app(ReadOnlyGuard::class)->run(
+        $this->dispatchQuery(
+            fn(ReadOnlyGuard $guard): ResultSet => $guard->run(
                 sql: (string) $this->sql,
                 connection: $this->connection,
                 limit: $this->rowLimit,
                 user: Auth::user(),
-            );
+            ),
+            isExplain: false,
+        );
+    }
+
+    public function explain(): void
+    {
+        if (! config('filament-dbview.features.explain', true)) {
+            return;
+        }
+
+        $this->dispatchQuery(
+            fn(ReadOnlyGuard $guard): ResultSet => $guard->explain(
+                sql: (string) $this->sql,
+                connection: $this->connection,
+                limit: $this->rowLimit,
+                user: Auth::user(),
+                analyze: false,
+            ),
+            isExplain: true,
+        );
+    }
+
+    public function explainAnalyze(): void
+    {
+        if (! config('filament-dbview.features.explain', true)) {
+            return;
+        }
+
+        $this->dispatchQuery(
+            fn(ReadOnlyGuard $guard): ResultSet => $guard->explain(
+                sql: (string) $this->sql,
+                connection: $this->connection,
+                limit: $this->rowLimit,
+                user: Auth::user(),
+                analyze: true,
+            ),
+            isExplain: true,
+        );
+    }
+
+    /**
+     * Shared execution wrapper for run/explain: reset state, invoke the guard,
+     * store the result, and surface errors safely (never leaking driver
+     * internals — OWASP A09).
+     *
+     * @param  \Closure(ReadOnlyGuard): ResultSet  $runner
+     */
+    private function dispatchQuery(\Closure $runner, bool $isExplain): void
+    {
+        $this->reset('error', 'hasRun', 'isExplain', 'resultColumns', 'resultRows', 'resultCount', 'resultTruncated', 'resultDurationMs');
+
+        try {
+            $result = $runner(app(ReadOnlyGuard::class));
 
             $this->applyResult($result);
+            $this->isExplain = $isExplain;
             $this->hasRun = true;
 
             Notification::make()
-                ->title($result->rowCount . ' row(s) returned in ' . round($result->durationMs) . ' ms')
+                ->title($isExplain
+                    ? __('Plan generated in :ms ms', ['ms' => round($result->durationMs)])
+                    : $result->rowCount . ' row(s) returned in ' . round($result->durationMs) . ' ms')
                 ->success()
                 ->send();
         } catch (UnsafeQueryException $e) {
@@ -271,7 +327,7 @@ final class QueryRunner extends Page
     {
         return Action::make('viewRow')
             ->slideOver()
-            ->modalHeading(fn (array $arguments): string => __('Row #') . ((int) ($arguments['index'] ?? 0) + 1))
+            ->modalHeading(fn(array $arguments): string => __('Row #') . ((int) ($arguments['index'] ?? 0) + 1))
             ->modalSubmitAction(false)
             ->modalCancelActionLabel(__('Close'))
             ->modalContent(function (array $arguments) {

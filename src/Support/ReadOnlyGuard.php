@@ -125,6 +125,33 @@ final class ReadOnlyGuard
      */
     public function run(string $sql, ?string $connection = null, ?int $limit = null, mixed $user = null): ResultSet
     {
+        return $this->execute($sql, $connection, $limit, $user, explainAnalyze: null);
+    }
+
+    /**
+     * Return the execution plan for the (validated read-only) SELECT. The user
+     * never types EXPLAIN — the statement passes the exact same read-only/scope
+     * guards as {@see run()}, and only then is a driver-appropriate EXPLAIN
+     * prefix prepended. This guarantees the analysed statement is always a single
+     * SELECT, so `EXPLAIN ANALYZE <write>` (which executes on Postgres/MySQL) can
+     * never be constructed.
+     *
+     * @param  bool  $analyze  when true, actually run the query to collect real
+     *                         timings/row counts (still row-capped, timed out and
+     *                         rolled back); when false, only the estimated plan.
+     */
+    public function explain(string $sql, ?string $connection = null, ?int $limit = null, mixed $user = null, bool $analyze = false): ResultSet
+    {
+        return $this->execute($sql, $connection, $limit, $user, explainAnalyze: $analyze);
+    }
+
+    /**
+     * Shared validate → scope → cap → execute pipeline for both plain reads and
+     * EXPLAIN. $explainAnalyze is null for a plain read, false for EXPLAIN, and
+     * true for EXPLAIN ANALYZE.
+     */
+    private function execute(string $sql, ?string $connection, ?int $limit, mixed $user, ?bool $explainAnalyze): ResultSet
+    {
         $sql = trim($sql);
         $physical = $this->connections->physicalName($connection);
 
@@ -138,6 +165,7 @@ final class ReadOnlyGuard
         }
 
         $limit = $this->resolveLimit($limit);
+        $dbConnection = $this->connections->connection($connection);
 
         // Raw SQL bypasses Eloquent's automatic table-prefixing, so translate
         // the logical model table names the user typed (as shown in the browser)
@@ -145,8 +173,15 @@ final class ReadOnlyGuard
         $executable = $this->applyTablePrefixes($sql, $analysis, $connection);
         $wrapped = $this->wrapWithLimit($executable, $limit);
 
+        // EXPLAIN of the row-capped SELECT: valid on every driver and it bounds
+        // the work EXPLAIN ANALYZE actually performs. Only ever applied to the
+        // already-validated SELECT above.
+        if ($explainAnalyze !== null) {
+            $wrapped = $this->explainPrefix($dbConnection, $explainAnalyze) . ' ' . $wrapped;
+        }
+
         $start = microtime(true);
-        $rows = $this->executeReadOnly($this->connections->connection($connection), $wrapped);
+        $rows = $this->executeReadOnly($dbConnection, $wrapped);
         $durationMs = (microtime(true) - $start) * 1000;
 
         $result = ResultSet::fromRows(
@@ -157,9 +192,26 @@ final class ReadOnlyGuard
             maxBytes: (int) config('filament-dbview.limits.max_result_bytes', 5 * 1024 * 1024),
         );
 
+        // Audit the raw SELECT (never the EXPLAIN-wrapped form), so a history
+        // entry loaded back into the editor is still a valid SELECT.
         $this->auditor->record($sql, $physical, $result->rowCount, $durationMs, true);
 
         return $result;
+    }
+
+    /**
+     * Driver-appropriate EXPLAIN prefix. MariaDB uses `ANALYZE <stmt>` for the
+     * executing form; SQLite has no analyze-exec form, so `EXPLAIN QUERY PLAN`
+     * serves both. Never applied to anything but a validated SELECT.
+     */
+    private function explainPrefix(Connection $connection, bool $analyze): string
+    {
+        return match ($connection->getDriverName()) {
+            'pgsql', 'mysql' => $analyze ? 'EXPLAIN ANALYZE' : 'EXPLAIN',
+            'mariadb' => $analyze ? 'ANALYZE' : 'EXPLAIN',
+            'sqlite' => 'EXPLAIN QUERY PLAN',
+            default => 'EXPLAIN',
+        };
     }
 
     /**

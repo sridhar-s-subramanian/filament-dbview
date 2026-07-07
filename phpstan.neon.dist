@@ -10,4 +10,14 @@ parameters:
         # Package view namespaces are not resolvable during static analysis.
         - identifier: argument.type
           message: '#Parameter \#1 \$view of function view expects view-string\|null, string given\.#'
-          path: src/Pages/DatabaseBrowser.php
+          paths:
+            - src/Pages/DatabaseBrowser.php
+            - src/Pages/QueryRunner.php
+        # getCurrentSchemaName() exists only on Laravel 12+; the method_exists()
+        # guard is required for the still-supported Laravel 11, where getTables()
+        # takes no schema and is already scoped to the current database. PHPStan
+        # analyses against a single (12+) Laravel install and so cannot see the
+        # branch as reachable.
+        - identifier: function.alreadyNarrowedType
+          message: '#Call to function method_exists\(\) with .*getCurrentSchemaName.* will always evaluate to true\.#'
+          path: src/Support/ConnectionResolver.php

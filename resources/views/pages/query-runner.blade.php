@@ -83,10 +83,20 @@
                     </x-filament::input.wrapper>
                 </div>
 
-                <div class="fdbv-qr-field" style="align-self: flex-end;">
-                    <x-filament::button wire:click="run" wire:loading.attr="disabled" wire:target="run" icon="heroicon-m-play">
+                <div class="fdbv-qr-field" style="align-self: flex-end; flex-direction: row; gap: .5rem;">
+                    <x-filament::button wire:click="run" wire:loading.attr="disabled" wire:target="run,explain,explainAnalyze" icon="heroicon-m-play">
                         {{ __('Run') }}
                     </x-filament::button>
+
+                    @if (config('filament-dbview.features.explain', true))
+                        <x-filament::button wire:click="explain" wire:loading.attr="disabled" wire:target="run,explain,explainAnalyze" color="gray" icon="heroicon-m-list-bullet">
+                            {{ __('Explain') }}
+                        </x-filament::button>
+
+                        <x-filament::button wire:click="explainAnalyze" wire:loading.attr="disabled" wire:target="run,explain,explainAnalyze" color="gray" icon="heroicon-m-bolt">
+                            {{ __('Explain Analyze') }}
+                        </x-filament::button>
+                    @endif
                 </div>
             </div>
 
@@ -109,7 +119,7 @@
                 {{ __('Read-only. A single SELECT (or WITH … SELECT) statement.') }}
             </p>
 
-            <div wire:loading.flex wire:target="run" class="fdbv-qr-hint" style="align-items:center; gap:.4rem;">
+            <div wire:loading.flex wire:target="run,explain,explainAnalyze" class="fdbv-qr-hint" style="align-items:center; gap:.4rem;">
                 {{ __('Running…') }}
             </div>
 
@@ -118,13 +128,23 @@
             @endif
 
             @if ($hasRun && ! $error)
-                @include('filament-dbview::components.results-grid', [
-                    'columns' => $resultColumns,
-                    'rows' => $resultRows,
-                    'truncated' => $resultTruncated,
-                    'count' => $resultCount,
-                    'duration' => $resultDurationMs,
-                ])
+                @if ($isExplain)
+                    @include('filament-dbview::components.explain-plan', [
+                        'columns' => $resultColumns,
+                        'rows' => $resultRows,
+                        'truncated' => $resultTruncated,
+                        'count' => $resultCount,
+                        'duration' => $resultDurationMs,
+                    ])
+                @else
+                    @include('filament-dbview::components.results-grid', [
+                        'columns' => $resultColumns,
+                        'rows' => $resultRows,
+                        'truncated' => $resultTruncated,
+                        'count' => $resultCount,
+                        'duration' => $resultDurationMs,
+                    ])
+                @endif
             @endif
         </div>
 

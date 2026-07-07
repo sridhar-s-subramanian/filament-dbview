@@ -40,6 +40,20 @@ it('blocks every malicious payload', function (string $sql): void {
     securityGuard()->run($sql);
 })->with('malicious_payloads')->throws(UnsafeQueryException::class);
 
+it('blocks every malicious payload in explain mode', function (string $sql): void {
+    securityGuard()->explain($sql);
+})->with('malicious_payloads')->throws(UnsafeQueryException::class);
+
+it('blocks every malicious payload in explain-analyze mode', function (string $sql): void {
+    securityGuard()->explain($sql, analyze: true);
+})->with('malicious_payloads')->throws(UnsafeQueryException::class);
+
+it('positive control: explaining a benign scoped SELECT is allowed', function (): void {
+    $result = securityGuard()->explain('SELECT id FROM posts');
+
+    expect($result->rowCount)->toBeGreaterThan(0);
+});
+
 it('records denied attempts to the audit history', function (): void {
     try {
         securityGuard()->run('DROP TABLE posts');

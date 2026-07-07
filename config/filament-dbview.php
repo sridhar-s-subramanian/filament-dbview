@@ -117,6 +117,7 @@ return [
         'history' => true,
         'saved_queries' => true,
         'relationship_preview' => true,
+        'result_schema' => true,
     ],
 
     /*

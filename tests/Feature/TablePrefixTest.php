@@ -81,3 +81,22 @@ it('allows querying non-prefixed tables on a prefixed connection in connection s
     expect($result->rowCount)->toBe(1)
         ->and($result->rows[0]['info'])->toBe('Legacy');
 });
+
+it('introspects schema on a prefixed table by its logical name', function (): void {
+    // getIndexes()/getForeignKeys() add the connection prefix themselves, so the
+    // inspector must pass the logical name (widgets), not the physical
+    // pfx_widgets — otherwise it double-prefixes and finds nothing.
+    $schema = app(\SridharSSubramanian\FilamentDbview\Support\SchemaInspector::class)
+        ->for(['widgets'], 'prefixed', null);
+
+    expect($schema)->toHaveCount(1)
+        ->and($schema[0]['table'])->toBe('widgets');
+
+    $primaries = array_values(array_filter(
+        $schema[0]['indexes'],
+        static fn(array $index): bool => $index['primary'],
+    ));
+
+    expect($primaries)->not->toBeEmpty()
+        ->and($primaries[0]['columns'])->toBe(['id']);
+});

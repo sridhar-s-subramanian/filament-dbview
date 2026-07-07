@@ -19,6 +19,8 @@ use SridharSSubramanian\FilamentDbview\Support\Authorization;
 use SridharSSubramanian\FilamentDbview\Support\ConnectionResolver;
 use SridharSSubramanian\FilamentDbview\Support\ReadOnlyGuard;
 use SridharSSubramanian\FilamentDbview\Support\ResultSet;
+use SridharSSubramanian\FilamentDbview\Support\SchemaInspector;
+use SridharSSubramanian\FilamentDbview\Support\SqlAnalyzer;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 use UnitEnum;
@@ -101,6 +103,31 @@ final class QueryRunner extends Page
         sort($tables);
 
         return $tables;
+    }
+
+    /**
+     * Indexes + foreign keys of the tables referenced by the last successful
+     * (non-EXPLAIN) query, for the Adminer-style schema panel under the results.
+     *
+     * @return list<array{table: string, label: string, indexes: list<array{name: string, columns: list<string>, unique: bool, primary: bool}>, foreignKeys: list<array{columns: list<string>, foreign_table: string, foreign_columns: list<string>, on_delete: string|null, on_update: string|null}>}>
+     */
+    public function getResultSchema(): array
+    {
+        if (! config('filament-dbview.features.result_schema', true)) {
+            return [];
+        }
+
+        if (! $this->hasRun || $this->error !== null || $this->isExplain || $this->sql === null) {
+            return [];
+        }
+
+        $tables = SqlAnalyzer::of((string) $this->sql)->tables;
+
+        if ($tables === []) {
+            return [];
+        }
+
+        return app(SchemaInspector::class)->for($tables, $this->connection, Auth::user());
     }
 
     public function run(): void

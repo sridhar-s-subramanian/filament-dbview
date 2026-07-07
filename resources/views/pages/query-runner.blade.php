@@ -144,6 +144,11 @@
                         'count' => $resultCount,
                         'duration' => $resultDurationMs,
                     ])
+
+                    @php($resultSchema = $this->getResultSchema())
+                    @if (! empty($resultSchema))
+                        @include('filament-dbview::components.result-schema', ['schema' => $resultSchema])
+                    @endif
                 @endif
             @endif
         </div>

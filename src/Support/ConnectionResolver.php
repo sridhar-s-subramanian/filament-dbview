@@ -42,7 +42,19 @@ final class ConnectionResolver
 
         try {
             $prefix = DB::connection($name)->getTablePrefix();
-            $rawTables = Schema::connection($name)->getTables();
+
+            // Scope to the connection's own database. Laravel 12's getTables()
+            // with no schema returns every table in every schema the connection
+            // user can access (all databases on the server), which would leak
+            // unrelated tables into the runner's list and its scope checks.
+            // Passing the current schema restricts it to the configured
+            // database. getCurrentSchemaName() is absent on Laravel 11, where
+            // getTables() is already scoped to the current database.
+            $builder = Schema::connection($name);
+            $schema = method_exists($builder, 'getCurrentSchemaName')
+                ? $builder->getCurrentSchemaName()
+                : null;
+            $rawTables = $builder->getTables($schema);
 
             $tables = [];
             $mapping = [];

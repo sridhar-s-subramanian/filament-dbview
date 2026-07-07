@@ -68,7 +68,7 @@
                 <div class="fdbv-qr-field" style="flex: 1 1 16rem;">
                     <span class="fdbv-qr-label">{{ __('Connection') }}</span>
                     <x-filament::input.wrapper>
-                        <x-filament::input.select wire:model="connection">
+                        <x-filament::input.select wire:model.live="connection">
                             @foreach ($this->getConnectionOptions() as $value => $label)
                                 <option value="{{ $value }}">{{ $label }}</option>
                             @endforeach

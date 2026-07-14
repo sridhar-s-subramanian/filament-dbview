@@ -58,6 +58,82 @@ it('does not show structure when the feature is disabled', function (): void {
     expect($page->isStructure)->toBeFalse();
 });
 
+it('registers a Structure header action when the feature is enabled', function (): void {
+    $page = new QueryRunner();
+    $page->mount();
+
+    $method = new ReflectionMethod(QueryRunner::class, 'getHeaderActions');
+    $actions = $method->invoke($page);
+    $names = array_map(static fn(Action $action): string => $action->getName(), $actions);
+
+    expect($names)->toContain('structure');
+
+    $structure = collect($actions)->first(
+        static fn(Action $action): bool => $action->getName() === 'structure',
+    );
+
+    expect($structure)->toBeInstanceOf(Action::class)
+        ->and($structure->getLabel())->toBe(__('Structure'));
+});
+
+it('omits the Structure header action when the feature is disabled', function (): void {
+    config()->set('filament-dbview.features.structure', false);
+
+    $page = new QueryRunner();
+    $page->mount();
+
+    $method = new ReflectionMethod(QueryRunner::class, 'getHeaderActions');
+    $actions = $method->invoke($page);
+    $names = array_map(static fn(Action $action): string => $action->getName(), $actions);
+
+    expect($names)->not->toContain('structure');
+});
+
+it('shows structure for the table referenced in the editor SQL', function (): void {
+    $page = new QueryRunner();
+    $page->mount();
+    $page->sql = 'SELECT id, title FROM posts ORDER BY id';
+
+    $page->showStructureFromSql();
+
+    expect($page->isStructure)->toBeTrue()
+        ->and($page->structure['table'])->toBe('posts')
+        ->and($page->error)->toBeNull();
+});
+
+it('uses the first real table when the query references several', function (): void {
+    $page = new QueryRunner();
+    $page->mount();
+    $page->sql = 'SELECT * FROM posts JOIN users ON users.id = posts.user_id';
+
+    $page->showStructureFromSql();
+
+    expect($page->isStructure)->toBeTrue()
+        ->and($page->structure['table'])->toBe('posts');
+});
+
+it('does not open structure when the SQL has no table reference', function (): void {
+    $page = new QueryRunner();
+    $page->mount();
+    $page->sql = 'SELECT 1';
+
+    $page->showStructureFromSql();
+
+    expect($page->isStructure)->toBeFalse()
+        ->and($page->structure)->toBe([]);
+});
+
+it('ignores CTE names when resolving structure from SQL', function (): void {
+    $page = new QueryRunner();
+    $page->mount();
+    $page->sql = 'WITH recent AS (SELECT id FROM posts) SELECT id FROM recent';
+
+    $page->showStructureFromSql();
+
+    expect($page->isStructure)->toBeTrue()
+        ->and($page->structure['table'])->toBe('posts');
+});
+
 it('clears prior query results when showing structure', function (): void {
     $page = new QueryRunner();
     $page->hasRun = true;

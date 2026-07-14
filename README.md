@@ -91,8 +91,9 @@ An Adminer-style console for SQL-literate users:
   driver-appropriate prefix prepended, so the analysed statement is always a single
   SELECT. `EXPLAIN ANALYZE` executes the query to collect real timings, still
   row-capped, timed out, and rolled back.
-- **Show structure** — the sidebar lists tables; each has a structure icon that
-  shows the table's **columns** (name, type, nullable, default, PK/auto-increment),
+- **Show structure** — header **Structure** uses the table referenced in your
+  SQL (first real table if several; CTEs ignored). Sidebar icons still open
+  structure for any listed table without writing a query. Shows **columns**,
   **indexes**, and **foreign keys**, Adminer-style.
 - **Export** results to CSV or JSON (on by default; disable with
   `features.export => false`, or restrict with `authorization.export_gate`),

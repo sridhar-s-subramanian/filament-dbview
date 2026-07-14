@@ -22,6 +22,7 @@ use SridharSSubramanian\FilamentDbview\Support\ModelDiscovery;
 use SridharSSubramanian\FilamentDbview\Support\ReadOnlyGuard;
 use SridharSSubramanian\FilamentDbview\Support\ResultSet;
 use SridharSSubramanian\FilamentDbview\Support\SchemaInspector;
+use SridharSSubramanian\FilamentDbview\Support\SqlAnalyzer;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 use UnitEnum;
@@ -288,9 +289,22 @@ final class QueryRunner extends Page
      */
     protected function getHeaderActions(): array
     {
-        // Run lives in the editor toolbar (with ⌘/Ctrl+Enter); header keeps the
-        // result-oriented actions only.
+        // Run lives in the editor toolbar (with ⌘/Ctrl+Enter). Header holds
+        // Structure, export, and save — always-visible labeled actions.
         $actions = [];
+
+        if (config('filament-dbview.features.structure', true)) {
+            // No table picker: derive the table from the SQL in the editor (same
+            // analyzer the runner uses for scope). Sidebar icons still cover
+            // browsing structure without writing a query.
+            $actions[] = Action::make('structure')
+                ->label(__('Structure'))
+                ->icon('heroicon-m-table-cells')
+                ->color('gray')
+                ->action(function (): void {
+                    $this->showStructureFromSql();
+                });
+        }
 
         if (Authorization::canExport()) {
             $actions[] = Action::make('exportCsv')
@@ -330,6 +344,55 @@ final class QueryRunner extends Page
         }
 
         return $actions;
+    }
+
+    /**
+     * Open structure for a table referenced in the editor SQL. Uses
+     * {@see SqlAnalyzer} table extraction (CTEs excluded). One table → show it;
+     * several → show the first and note the rest; none → prompt the user.
+     */
+    public function showStructureFromSql(): void
+    {
+        if (! config('filament-dbview.features.structure', true)) {
+            return;
+        }
+
+        $sql = trim((string) $this->sql);
+
+        if ($sql === '') {
+            Notification::make()
+                ->title(__('No query to inspect'))
+                ->body(__('Type a SELECT that references a table, or use the structure icon next to a table in the sidebar.'))
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $tables = SqlAnalyzer::of($sql)->tables;
+
+        if ($tables === []) {
+            Notification::make()
+                ->title(__('No table found in the query'))
+                ->body(__('Reference a table in FROM/JOIN, or use the structure icon in the sidebar.'))
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $primary = $tables[0];
+        $this->showStructure($primary);
+
+        if (count($tables) > 1) {
+            $others = implode(', ', array_slice($tables, 1));
+
+            Notification::make()
+                ->title(__('Showing structure for :table', ['table' => $primary]))
+                ->body(__('Also referenced: :tables. Use the sidebar icons for those.', ['tables' => $others]))
+                ->info()
+                ->send();
+        }
     }
 
     private function saveQuery(string $name): void

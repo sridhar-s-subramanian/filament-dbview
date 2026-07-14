@@ -7,34 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-07-14
+
 ### Added
 
-- **Optional `authorization.export_gate`** for CSV/JSON downloads (null = allow
-  any user who can run queries). Set a Gate ability to restrict export by role;
-  set `features.export => false` to disable export entirely. Documented in the
-  README Authorization section.
+- **Optional `authorization.export_gate`** for CSV/JSON downloads. Default `null`
+  allows any user who can run queries; set a Gate ability to restrict export by
+  role. Use `features.export => false` to disable export entirely.
 - **`audit.log_sql`** (default `true`) — set `false` to omit full SQL from PSR-3
-  audit log context (metadata only). Dedicated README **Auditing** section covers
-  `log_channel`, sensitivity of SQL in logs, and how history differs.
-- README **Model discovery & registry cache** — documents `paths`, `exclude`,
-  cache TTL/`filament-dbview:clear`, and how discovery interacts with
-  `table_gate` and `allTables()`. Config comments expanded with examples.
-- README **SQL analysis limits** plus a CTE regression corpus; CTE name
-  extraction now recognises Postgres `AS MATERIALIZED` / `AS NOT MATERIALIZED`.
-- **Reject row-lock clauses** on Query Runner SELECTs (`FOR UPDATE` / `FOR SHARE`
-  / `FOR KEY SHARE` / `SKIP LOCKED` / `NOWAIT` / `LOCK IN SHARE MODE`).
+  audit log context (metadata only: user, connection, allowed, reason, counts).
+- Query Runner **Structure** header action — opens structure for the table
+  referenced in the editor SQL (first real table if several; CTEs ignored).
+  Sidebar structure icons remain for browsing without a query.
+- **GitHub Actions** CI workflow runs the test suite on every push and pull
+  request (PHP 8.2–8.5).
+- README sections: **Authorization (opt-in)**, **Auditing**, **Model discovery &
+  registry cache**, and **SQL analysis limits**.
+
+### Changed
+
+- Saved queries and recent-query sidebars use a **fixed max height with
+  scrollbar** so long lists no longer stretch the page.
+- Docs clarify allow-by-default authorization, intentional empty deny under
+  `->allTables()`, history feature opt-in vs always-on PSR-3 audit logging, and
+  production guidance (dedicated log channel, `filament-dbview:clear` on deploy).
 
 ### Fixed
 
-- **Security: high-severity hardening.**
-  - **Connection allowlist enforced** on every Query Runner execute (blocks
-    Livewire clients from pointing at arbitrary Laravel connections).
-  - **Schema/database-qualified table names rejected** (`other_db.users`,
+- **Security: high-severity hardening**
+  - Connection allowlist enforced on every Query Runner execute (blocks pointing
+    Livewire at arbitrary Laravel connections).
+  - Schema/database-qualified table names rejected (`other_db.users`,
     `public.posts`) so an allowed bare name cannot unlock another catalog.
-  - **Database Browser** uses `ConnectionResolver` for optional `read_only`
-    remaps and applies statement timeouts on browse / relationship previews.
-  - **Expanded denylist** for side-effect SELECTs: `GET_LOCK` / advisory locks,
+  - Database Browser uses `ConnectionResolver` for optional `read_only` remaps
+    and applies statement timeouts on browse and relationship previews.
+  - Expanded denylist for side-effect SELECTs: `GET_LOCK` / advisory locks,
     `pg_terminate_backend`, `OPENROWSET`, and related primitives.
+- **Security: row-lock clauses** rejected on Query Runner SELECTs (`FOR UPDATE`,
+  `FOR SHARE`, `FOR KEY SHARE`, `SKIP LOCKED`, `NOWAIT`, `LOCK IN SHARE MODE`).
+- CTE name extraction recognises Postgres `AS MATERIALIZED` /
+  `AS NOT MATERIALIZED` so CTE names are not treated as real tables.
+- CTE regression corpus and expanded OWASP / unit coverage for the above.
 
 ## [1.3.0] - 2026-07-14
 
@@ -122,6 +135,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional full-database Query Runner scope (`->allTables()` / `->denyTables()`),
   with prefix-resilient handling of prefixed and non-prefixed tables.
 
+[1.4.0]: https://github.com/sridhar-s-subramanian/filament-dbview/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/sridhar-s-subramanian/filament-dbview/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/sridhar-s-subramanian/filament-dbview/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/sridhar-s-subramanian/filament-dbview/compare/v1.0.2...v1.1.0

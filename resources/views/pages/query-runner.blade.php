@@ -35,6 +35,8 @@
         .fdbv-qr-search { padding: .5rem; border-bottom: 1px solid rgba(0,0,0,.06); }
         .dark .fdbv-qr-search { border-color: rgba(255,255,255,.08); }
         .fdbv-qr-list { display: flex; flex-direction: column; padding: .375rem; gap: 2px; max-height: 40vh; overflow-y: auto; }
+        /* Saved / history: shorter fixed pane so the sidebar stays usable */
+        .fdbv-qr-list-compact { max-height: 12rem; overflow-y: auto; }
         .fdbv-qr-item { display: block; width: 100%; text-align: left; padding: .4rem .55rem; border-radius: .4rem; color: rgb(55 65 81); cursor: pointer; transition: background-color .15s; }
         .fdbv-qr-item:hover { background: rgb(249 250 251); }
         .dark .fdbv-qr-item { color: rgb(209 213 219); }
@@ -221,7 +223,7 @@
             @if (config('filament-dbview.features.saved_queries', true))
                 <div class="fdbv-qr-card">
                     <div class="fdbv-qr-card-head">{{ __('Saved queries') }}</div>
-                    <div class="fdbv-qr-list">
+                    <div class="fdbv-qr-list fdbv-qr-list-compact">
                         @forelse ($this->getSavedQueries() as $item)
                             <button type="button" wire:click="loadSaved({{ $item->id }})" class="fdbv-qr-item" title="{{ $item->sql }}">
                                 <span class="n">{{ $item->name }}</span>
@@ -237,7 +239,7 @@
             @if (config('filament-dbview.features.history', false))
                 <div class="fdbv-qr-card">
                     <div class="fdbv-qr-card-head">{{ __('Recent queries') }}</div>
-                    <div class="fdbv-qr-list">
+                    <div class="fdbv-qr-list fdbv-qr-list-compact">
                         @forelse ($this->getHistory() as $item)
                             <button type="button" wire:click="loadHistory({{ $item->id }})" class="fdbv-qr-item" title="{{ $item->sql }}">
                                 <span class="q">{{ \Illuminate\Support\Str::limit($item->sql, 46) }}</span>

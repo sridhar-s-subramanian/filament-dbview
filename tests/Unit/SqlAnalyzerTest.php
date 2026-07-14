@@ -106,3 +106,13 @@ it('flags advisory lock and get_lock functions as forbidden', function (string $
     ['select pg_advisory_lock(1)', 'PG_ADVISORY_LOCK'],
     ['select pg_terminate_backend(1)', 'PG_TERMINATE_BACKEND'],
 ]);
+
+it('does not treat MATERIALIZED CTE names as real tables', function (): void {
+    $analysis = SqlAnalyzer::of(
+        'WITH x AS MATERIALIZED (SELECT id FROM posts) SELECT * FROM x',
+    );
+
+    expect($analysis->cteNames)->toContain('x')
+        ->and($analysis->tables)->toContain('posts')
+        ->and($analysis->tables)->not->toContain('x');
+});

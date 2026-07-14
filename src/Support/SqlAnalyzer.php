@@ -683,9 +683,13 @@ final class SqlAnalyzer
     }
 
     /**
-     * Names introduced by a WITH clause (`WITH x AS (…), y AS (…)` and
-     * `WITH x(a,b) AS (…)`). These are derived tables and must be excluded
-     * from real-table scope checks.
+     * Names introduced by a WITH clause. These are derived tables and must be
+     * excluded from real-table scope checks. Supports:
+     *
+     *   WITH x AS (…), y AS (…)
+     *   WITH x(a,b) AS (…)
+     *   WITH RECURSIVE t(n) AS (…)
+     *   WITH x AS MATERIALIZED (…), y AS NOT MATERIALIZED (…)  (Postgres)
      *
      * @return list<string>
      */
@@ -693,9 +697,9 @@ final class SqlAnalyzer
     {
         $names = [];
 
-        // WITH [RECURSIVE] name [(cols)] AS (
+        // WITH [RECURSIVE] name [(cols)] AS [NOT] MATERIALIZED? (
         if (preg_match_all(
-            '/(?:\bWITH\b(?:\s+RECURSIVE)?|,)\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:\([^)]*\))?\s+AS\s*\(/i',
+            '/(?:\bWITH\b(?:\s+RECURSIVE)?|,)\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:\([^)]*\))?\s+AS\s+(?:(?:NOT\s+)?MATERIALIZED\s+)?\(/i',
             $stripped,
             $matches,
         ) !== false) {

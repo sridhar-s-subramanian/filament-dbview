@@ -15,21 +15,31 @@ return [
     | "models". When scope is "connection" (allTables), the runner may also
     | query other real tables on allowed connections (see query_runner below).
     |
+    | After changing paths, exclude, or your models (table/connection), run:
+    |   php artisan filament-dbview:clear
+    | when cache.enabled is true (recommended in deploy scripts). See the README
+    | "Model discovery & registry cache" section.
+    |
     */
 
     'models' => [
         'paths' => [
             app_path('Models'),
+            // app_path('Domain/Billing/Models'),
         ],
 
-        // Fully-qualified model classes to exclude from discovery.
+        // Fully-qualified model classes never added to the registry (all users).
+        // Prefer this for models that should not appear in the Browser at all;
+        // use authorization.table_gate for per-role visibility instead.
         'exclude' => [
-            //
+            // \App\Models\PersonalAccessToken::class,
+            // \App\Models\Passport\Token::class,
+            // \App\Models\Admin::class,
         ],
 
         // Cache the discovered registry to avoid filesystem/schema reflection
-        // on every request. Set ttl to null to cache forever (clear manually
-        // via the `filament-dbview:clear` command).
+        // on every request. Set ttl to null to cache until filament-dbview:clear.
+        // Disable in local dev with FILAMENT_DBVIEW_CACHE=false if you prefer.
         'cache' => [
             'enabled' => env('FILAMENT_DBVIEW_CACHE', true),
             'store' => null, // null = default cache store
@@ -113,6 +123,10 @@ return [
     'features' => [
         'query_runner' => true,
         'explain' => true,
+
+        // CSV/JSON download buttons on the Query Runner. Set false to remove
+        // export for everyone. To allow export but only for some roles, leave
+        // this true and set authorization.export_gate instead.
         'export' => true,
 
         // Feature opt-in: when true, every allowed/denied query is written to
@@ -173,9 +187,12 @@ return [
     | names defined in your app (Spatie, Shield, custom, …). See the README
     | "Authorization (opt-in)" section.
     |
-    |   gate              — required to open Database Browser and Query Runner
+    |   gate              — when set, required to open Database Browser and Query Runner
     |   query_runner_gate — extra check for Query Runner only (raw SELECT)
     |   table_gate        — per table; ability receives the table name argument
+    |   export_gate       — extra check for CSV/JSON export (null = any query runner user)
+    |
+    | To disable export entirely for everyone, set features.export => false instead.
     |
     */
 
@@ -183,16 +200,31 @@ return [
         'gate' => null,
         'query_runner_gate' => null,
         'table_gate' => null,
+        'export_gate' => null,
     ],
 
     /*
     |--------------------------------------------------------------------------
     | Auditing (OWASP A09)
     |--------------------------------------------------------------------------
+    |
+    | Every Query Runner attempt (allowed or denied) is written to a PSR-3 log
+    | channel. This always runs; it is separate from features.history.
+    |
+    |   log_channel — Laravel log channel name (null = default app logger).
+    |                 Prefer a dedicated channel with restricted access/retention.
+    |   log_sql     — when true (default), the full SQL text is included in the
+    |                 log context (may contain secrets typed in WHERE clauses).
+    |                 Set false to log metadata only (user, connection, allowed,
+    |                 reason, row_count, duration). History still stores full SQL
+    |                 when features.history is enabled.
+    |
     */
 
     'audit' => [
         'log_channel' => env('FILAMENT_DBVIEW_LOG_CHANNEL', null),
+        // filter_var so FILAMENT_DBVIEW_LOG_SQL=false in .env is actually false
+        'log_sql' => filter_var(env('FILAMENT_DBVIEW_LOG_SQL', true), FILTER_VALIDATE_BOOLEAN),
     ],
 
     /*

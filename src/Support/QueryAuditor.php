@@ -14,6 +14,10 @@ use Throwable;
  * Records every query attempt — allowed or denied — for accountability
  * (OWASP A09: Security Logging & Monitoring). Writes a structured PSR-3 log
  * line and, when the history feature is enabled, a per-user history row.
+ *
+ * PSR-3 logging always runs. Full SQL is included in the log context when
+ * audit.log_sql is true (default). Set log_sql to false to keep metadata only.
+ * History (when enabled) still stores full SQL for the Query Runner UI.
  */
 final class QueryAuditor
 {
@@ -35,8 +39,11 @@ final class QueryAuditor
             'reason' => $reason,
             'row_count' => $rowCount,
             'duration_ms' => round($durationMs, 2),
-            'sql' => $sql,
         ];
+
+        if (config('filament-dbview.audit.log_sql', true)) {
+            $context['sql'] = $sql;
+        }
 
         $this->logger()->info('filament-dbview query ' . ($allowed ? 'allowed' : 'denied'), $context);
 

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Optional `authorization.export_gate`** for CSV/JSON downloads (null = allow
+  any user who can run queries). Set a Gate ability to restrict export by role;
+  set `features.export => false` to disable export entirely. Documented in the
+  README Authorization section.
+- **`audit.log_sql`** (default `true`) — set `false` to omit full SQL from PSR-3
+  audit log context (metadata only). Dedicated README **Auditing** section covers
+  `log_channel`, sensitivity of SQL in logs, and how history differs.
+- README **Model discovery & registry cache** — documents `paths`, `exclude`,
+  cache TTL/`filament-dbview:clear`, and how discovery interacts with
+  `table_gate` and `allTables()`. Config comments expanded with examples.
+- README **SQL analysis limits** plus a CTE regression corpus; CTE name
+  extraction now recognises Postgres `AS MATERIALIZED` / `AS NOT MATERIALIZED`.
+
 ### Fixed
 
 - **Security: high-severity hardening.**

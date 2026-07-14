@@ -292,20 +292,28 @@ final class QueryRunner extends Page
         // result-oriented actions only.
         $actions = [];
 
-        if (config('filament-dbview.features.export', true)) {
+        if (Authorization::canExport()) {
             $actions[] = Action::make('exportCsv')
                 ->label('CSV')
                 ->icon('heroicon-m-arrow-down-tray')
                 ->color('gray')
                 ->visible(fn(): bool => $this->hasRun && $this->resultRows !== [])
-                ->action(fn(): StreamedResponse => ResultExporter::csv($this->currentResultSet()));
+                ->action(function (): StreamedResponse {
+                    abort_unless(Authorization::canExport(), 403);
+
+                    return ResultExporter::csv($this->currentResultSet());
+                });
 
             $actions[] = Action::make('exportJson')
                 ->label('JSON')
                 ->icon('heroicon-m-arrow-down-tray')
                 ->color('gray')
                 ->visible(fn(): bool => $this->hasRun && $this->resultRows !== [])
-                ->action(fn(): StreamedResponse => ResultExporter::json($this->currentResultSet()));
+                ->action(function (): StreamedResponse {
+                    abort_unless(Authorization::canExport(), 403);
+
+                    return ResultExporter::json($this->currentResultSet());
+                });
         }
 
         if (config('filament-dbview.features.saved_queries', true)) {

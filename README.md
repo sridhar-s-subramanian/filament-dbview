@@ -112,20 +112,38 @@ retyping:
 
 ## Query Runner scope
 
-The Database Browser is always limited to model-backed tables. The Query Runner
-defaults to the same, but can be widened to any table on an allowed connection:
+The **Database Browser** is always limited to model-backed tables.
+
+The **Query Runner** defaults to the same (`scope = models`), but can be widened
+so operators can run `SELECT`s against **any real table on an allowed
+connection** — including tables that have **no Eloquent model**. That is
+intentional: use it when you need Adminer-style ad-hoc reads beyond the model
+map.
+
+| Scope | How to enable | Tables listed / queryable |
+|---|---|---|
+| `models` (default) | (default) | Only discovered Eloquent models |
+| `connection` | `->allTables()` or `queryRunnerScope('connection')` | Every real table on the connection |
 
 ```php
 $panel->plugin(
     DbviewPlugin::make()
-        ->allTables()                                   // query any real table
-        ->denyTables(['password_reset_tokens', 'sessions']), // …except these
+        ->allTables() // list + allow every table on allowed connections
+        // Optional: still block a few sensitive framework tables
+        ->denyTables(['password_reset_tokens', 'sessions', 'personal_access_tokens']),
 );
 ```
 
-`->allTables()` is shorthand for `->queryRunnerScope('connection')`. Read-only
-guards and column redaction still apply to every table. These setters take
-precedence over the `query_runner` values in the config file.
+Details:
+
+- `->allTables()` is shorthand for `->queryRunnerScope('connection')`.
+- The deny list is **empty by default** so model-less tables are fully reachable
+  when you opt into connection scope. Add `->denyTables([...])` only when you
+  want exceptions (e.g. token/session tables).
+- Read-only guards, redaction, row limits, timeouts, connection allowlisting,
+  and the optional read-only DB remap still apply to every table.
+- Fluent plugin setters take precedence over the `query_runner` values in the
+  config file.
 
 Query history is **off by default** (the `dbview_query_history` migration still
 ships). Enable the feature with `->history()` or `features.history => true` when
@@ -140,23 +158,29 @@ Direct database access is guarded on multiple, independent layers — see
 1. **Lexical allowlist** — only a single `SELECT` / `WITH … SELECT` statement is
    accepted. Stacked statements, executable comments (`/*! … */`, `/*+ … */`), and
    write/DDL/file/DoS tokens (`INSERT`, `UPDATE`, `DROP`, `INTO OUTFILE`,
-   `LOAD_FILE`, `pg_read_file`, `SLEEP`, `BENCHMARK`, …) are rejected. Keywords
-   hidden inside string literals or comments cannot fool the analyzer.
-2. **Table scope** — every referenced table must belong to a discovered model the
-   current user is allowed to see. System tables are never reachable.
-3. **Enforced `LIMIT`** and **statement timeout** cap runaway queries.
-4. **Rolled-back transaction** — reads execute inside a transaction that is always
-   rolled back, so nothing can persist even if a layer above were bypassed. This
-   also covers `EXPLAIN ANALYZE`, which executes its (SELECT-only) target.
-5. **Optional dedicated read-only connection** — route all queries through a
-   database user granted only `SELECT` (the strongest control).
+   `LOAD_FILE`, `pg_read_file`, `SLEEP`, `BENCHMARK`, lock helpers, …) are
+   rejected. Keywords hidden inside string literals or comments cannot fool the
+   analyzer. Schema/database-qualified names (`other_db.users`) are refused.
+2. **Table scope** — in the default `models` scope, every referenced table must
+   belong to a discovered model the current user may see. In `connection` scope
+   (`->allTables()`), any real table on an allowed connection is fair game
+   (optional `denyTables()` exceptions). The Browser stays model-only either way.
+3. **Connection allowlist** — the runner may only use connections derived from
+   discovered models (or an explicit `connections.allowed` list).
+4. **Enforced `LIMIT`** and **statement timeout** cap runaway queries.
+5. **Rolled-back transaction** (Query Runner) — reads execute inside a
+   transaction that is always rolled back, so nothing can persist even if a
+   layer above were bypassed. This also covers `EXPLAIN ANALYZE`.
+6. **Optional dedicated read-only connection** — route Browser and Runner
+   queries through a database user granted only `SELECT` (the strongest control).
 
 Additional controls:
 
 - **Sensitive-column redaction** (`password`, `*_token`, `*_secret`, …) in the
-  browser, the runner, and every export.
-- **Deny-by-default authorization** via configurable gates (page, query-runner,
-  and per-table).
+  browser, the runner, and every export (including alias/expression selects).
+- **Configurable authorization** via gates (page, query-runner, and per-table).
+  Gates are off by default (`null`); the host panel’s own auth still applies —
+  set gates for least privilege in multi-role apps.
 - **Auditing** of every allowed/denied attempt to a PSR-3 channel (and to the
   history table when `features.history` is enabled).
 
@@ -196,12 +220,12 @@ Everything is configured in `config/filament-dbview.php`. The most useful knobs:
 ],
 
 'query_runner' => [
-    'scope' => 'models',                 // 'models' | 'connection'
-    'deny'  => [],                       // blocked even in 'connection' scope
+    'scope' => 'models',                 // 'models' | 'connection' (allTables)
+    'deny'  => [],                       // optional blocks in connection scope only
 ],
 
 'authorization' => [
-    'gate'              => null,         // gate checked before any dbview page
+    'gate'              => null,         // null = any panel user; set a Gate ability in production
     'query_runner_gate' => null,         // additionally guards the SELECT runner
     'table_gate'        => null,         // per-table filter (receives table name)
 ],

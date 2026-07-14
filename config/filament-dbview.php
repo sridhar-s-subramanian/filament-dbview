@@ -134,17 +134,18 @@ return [
     |
     | The Database Browser is always limited to model-backed tables. The Query
     | Runner can optionally be widened to any table that exists on an allowed
-    | connection:
+    | connection so operators can SELECT tables that have no Eloquent model:
     |
     |   'models'     => only model-backed tables (default; safest).
     |   'connection' => any real table on an allowed connection, referenced by
     |                   its real (physical) name. Model tables still accept their
     |                   logical name. Read-only guards and column redaction still
-    |                   apply to every table.
+    |                   apply to every table. Empty "deny" is intentional so
+    |                   model-less tables are fully reachable.
     |
     | "deny" lists tables that stay blocked even in 'connection' scope (matched
     | against both the name typed and the real table name), e.g. framework or
-    | secret tables. Empty by default.
+    | secret tables. Empty by default — use it only when you want exceptions.
     |
     | These are the defaults; they can also be set fluently when registering the
     | plugin, which takes precedence:

@@ -41,4 +41,9 @@ final class UnsafeQueryException extends RuntimeException
     {
         return new self('The query is empty.');
     }
+
+    public static function unresolvableTableRef(): self
+    {
+        return new self('A table reference could not be resolved safely. Use unquoted table names from the allowlist.');
+    }
 }

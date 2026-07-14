@@ -8,6 +8,9 @@ namespace SridharSSubramanian\FilamentDbview\Support;
  * Masks values of sensitive columns (passwords, tokens, secrets, …) wherever
  * data leaves the database — browser, query runner, and every export.
  * (OWASP A02: Cryptographic/Sensitive Data Exposure.)
+ *
+ * Column-name patterns catch `SELECT password`. Forced names/positions catch
+ * alias and expression bypasses such as `password AS pwd` and `hex(password)`.
  */
 final class Redactor
 {
@@ -49,14 +52,38 @@ final class Redactor
 
     /**
      * @param  array<string, mixed>  $row
+     * @param  list<string>  $forceColumns  output names that must be masked
+     * @param  list<int>  $forcePositions  0-based positions that must be masked
      * @return array<string, mixed>
      */
-    public function apply(array $row): array
+    public function apply(array $row, array $forceColumns = [], array $forcePositions = []): array
     {
+        $forceLookup = [];
+
+        foreach ($forceColumns as $name) {
+            $forceLookup[strtolower((string) $name)] = true;
+        }
+
+        $positionSet = [];
+
+        foreach ($forcePositions as $position) {
+            $positionSet[(int) $position] = true;
+        }
+
+        $index = 0;
+
         foreach ($row as $column => $value) {
-            if ($value !== null && $this->redacts((string) $column)) {
+            $shouldRedact = $value !== null && (
+                $this->redacts((string) $column)
+                || isset($forceLookup[strtolower((string) $column)])
+                || isset($positionSet[$index])
+            );
+
+            if ($shouldRedact) {
                 $row[$column] = $this->mask;
             }
+
+            $index++;
         }
 
         return $row;

@@ -32,3 +32,17 @@ it('masks sensitive values but preserves nulls', function (): void {
         ->and($redactor->apply(['password' => null]))
         ->toBe(['password' => null]);
 });
+
+it('force-masks aliased and positional outputs', function (): void {
+    $redactor = new Redactor(['password'], 'XXX');
+
+    expect($redactor->apply(
+        ['pwd' => 'hunter2', 'email' => 'a@b.c'],
+        forceColumns: ['pwd'],
+    ))->toBe(['pwd' => 'XXX', 'email' => 'a@b.c'])
+        ->and($redactor->apply(
+            ['hex(password)' => 'abc', 'email' => 'a@b.c'],
+            forceColumns: [],
+            forcePositions: [0],
+        ))->toBe(['hex(password)' => 'XXX', 'email' => 'a@b.c']);
+});

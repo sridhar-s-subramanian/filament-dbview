@@ -34,6 +34,9 @@ dataset('malicious_payloads', [
     'grant' => ['GRANT ALL ON posts TO evil'],
     'union out of scope table' => ['SELECT id FROM posts UNION SELECT name FROM sqlite_master'],
     'direct system table' => ['SELECT * FROM sqlite_master'],
+    'comma join out of scope' => ['SELECT * FROM posts, sqlite_master'],
+    'backtick out of scope' => ['SELECT * FROM `sqlite_master`'],
+    'double quote out of scope' => ['SELECT * FROM "sqlite_master"'],
 ]);
 
 it('blocks every malicious payload', function (string $sql): void {

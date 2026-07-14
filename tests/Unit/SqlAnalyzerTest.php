@@ -66,3 +66,28 @@ it('extracts referenced tables after FROM and JOIN', function (): void {
 
     expect($tables)->toContain('posts')->toContain('users');
 });
+
+it('extracts every table from comma-separated FROM lists', function (): void {
+    $tables = SqlAnalyzer::of('select * from posts, users, secrets')->tables;
+
+    expect($tables)->toContain('posts')->toContain('users')->toContain('secrets');
+});
+
+it('extracts quoted table identifiers', function (string $sql, string $table): void {
+    $analysis = SqlAnalyzer::of($sql);
+
+    expect($analysis->tables)->toContain($table)
+        ->and($analysis->hasUnresolvableTableRef)->toBeFalse();
+})->with([
+    ['select * from `posts`', 'posts'],
+    ['select * from "posts"', 'posts'],
+    ['select * from [posts]', 'posts'],
+]);
+
+it('is not fooled by keywords inside single-quoted strings after identifier changes', function (): void {
+    $analysis = SqlAnalyzer::of("select 'DROP TABLE x' as note from posts");
+
+    expect($analysis->isSelect())->toBeTrue()
+        ->and($analysis->forbiddenTokens())->toBe([])
+        ->and($analysis->tables)->toContain('posts');
+});

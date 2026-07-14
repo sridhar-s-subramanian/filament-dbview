@@ -28,6 +28,8 @@ final class ResultSet
      * first row, applying redaction and enforcing the byte cap.
      *
      * @param  list<array<string, mixed>>  $rows
+     * @param  list<string>  $forceRedactColumns
+     * @param  list<int>  $forceRedactPositions
      */
     public static function fromRows(
         array $rows,
@@ -35,6 +37,8 @@ final class ResultSet
         string $connection,
         float $durationMs,
         int $maxBytes,
+        array $forceRedactColumns = [],
+        array $forceRedactPositions = [],
     ): self {
         $columns = $rows === [] ? [] : array_map('strval', array_keys($rows[0]));
 
@@ -43,7 +47,7 @@ final class ResultSet
         $truncated = false;
 
         foreach ($rows as $row) {
-            $clean = $redactor->apply($row);
+            $clean = $redactor->apply($row, $forceRedactColumns, $forceRedactPositions);
             $bytes += strlen((string) json_encode($clean));
 
             if ($bytes > $maxBytes) {

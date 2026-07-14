@@ -82,6 +82,12 @@ final class ReadOnlyGuard
      */
     public function assertInScope(SqlAnalyzer $analysis, mixed $user = null, ?string $connection = null): void
     {
+        // Quoted / exotic table refs that the analyzer could not name must never
+        // slip through as "zero tables → nothing to check".
+        if ($analysis->hasUnresolvableTableRef) {
+            throw UnsafeQueryException::unresolvableTableRef();
+        }
+
         $registry = $this->discovery->registry()->visibleTo($user);
         $scope = (string) config('filament-dbview.query_runner.scope', 'models');
         $deny = array_map('strtolower', (array) config('filament-dbview.query_runner.deny', []));
@@ -184,12 +190,24 @@ final class ReadOnlyGuard
         $rows = $this->executeReadOnly($dbConnection, $wrapped);
         $durationMs = (microtime(true) - $start) * 1000;
 
+        // Close alias / expression redaction bypasses (password AS pwd, hex(…)).
+        // Skip force-redaction for EXPLAIN plans — those columns are plan text,
+        // not query result values, and positional masks would scramble the plan.
+        $forceRedactColumns = $explainAnalyze === null
+            ? $analysis->sensitiveOutputNames($this->redactor)
+            : [];
+        $forceRedactPositions = $explainAnalyze === null
+            ? $analysis->sensitiveTopLevelPositions($this->redactor)
+            : [];
+
         $result = ResultSet::fromRows(
             rows: $rows,
             redactor: $this->redactor,
             connection: $physical,
             durationMs: $durationMs,
             maxBytes: (int) config('filament-dbview.limits.max_result_bytes', 5 * 1024 * 1024),
+            forceRedactColumns: $forceRedactColumns,
+            forceRedactPositions: $forceRedactPositions,
         );
 
         // Audit the raw SELECT (never the EXPLAIN-wrapped form), so a history

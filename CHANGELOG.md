@@ -5,7 +5,7 @@ All notable changes to `filament-dbview` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.3.0] - 2026-07-14
 
 ### Changed
 
@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `dbview_query_history` migration still ships with the package. Enable with
   `DbviewPlugin::make()->history()` or `features.history => true`. PSR-3 audit
   logging is unchanged and always runs.
+
+### Fixed
+
+- **Security: close critical Query Runner bypasses.**
+  - Table scope now covers **comma-separated `FROM` lists** (`FROM allowed, secret`
+    no longer skips the second table).
+  - **Quoted identifiers** (backticks, double quotes, brackets) keep their real
+    names for scope checks; unresolvable table refs fail closed.
+  - **Sensitive-column redaction** follows aliases and expressions
+    (`password AS pwd`, `hex(password)`, nested alias rewrites), not only
+    result column names that match redact patterns.
 
 ## [1.2.0] - 2026-07-07
 
@@ -80,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional full-database Query Runner scope (`->allTables()` / `->denyTables()`),
   with prefix-resilient handling of prefixed and non-prefixed tables.
 
+[1.3.0]: https://github.com/sridhar-s-subramanian/filament-dbview/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/sridhar-s-subramanian/filament-dbview/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/sridhar-s-subramanian/filament-dbview/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/sridhar-s-subramanian/filament-dbview/compare/v1.0.1...v1.0.2

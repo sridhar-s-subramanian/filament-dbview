@@ -88,6 +88,14 @@ final class ReadOnlyGuard
             throw UnsafeQueryException::unresolvableTableRef();
         }
 
+        // other_db.users / public.posts — refuse multi-part table refs so an
+        // allowed bare name cannot unlock another catalog/schema.
+        if ($analysis->hasQualifiedTableRef) {
+            throw UnsafeQueryException::qualifiedTableRef(
+                $analysis->qualifiedTableRef ?? 'qualified.table',
+            );
+        }
+
         $registry = $this->discovery->registry()->visibleTo($user);
         $scope = (string) config('filament-dbview.query_runner.scope', 'models');
         $deny = array_map('strtolower', (array) config('filament-dbview.query_runner.deny', []));
@@ -110,6 +118,18 @@ final class ReadOnlyGuard
             if (! $inModels) {
                 throw UnsafeQueryException::tableNotAllowed($table);
             }
+        }
+    }
+
+    /**
+     * The requested app connection must be on the viewer allowlist (explicit
+     * config or derived from discovered models). Prevents Livewire clients from
+     * pointing the runner at an arbitrary Laravel connection.
+     */
+    public function assertConnectionAllowed(?string $connection): void
+    {
+        if (! $this->connections->isAllowed($connection)) {
+            throw UnsafeQueryException::connectionNotAllowed($connection);
         }
     }
 
@@ -159,16 +179,21 @@ final class ReadOnlyGuard
     private function execute(string $sql, ?string $connection, ?int $limit, mixed $user, ?bool $explainAnalyze): ResultSet
     {
         $sql = trim($sql);
-        $physical = $this->connections->physicalName($connection);
+        // Audit against the logical request name when possible; fall back to
+        // physical after allowlist check so denied unknown names stay readable.
+        $auditConnection = $connection ?? (string) config('database.default');
 
         try {
+            $this->assertConnectionAllowed($connection);
             $analysis = $this->assertSafe($sql);
             $this->assertInScope($analysis, $user, $connection);
         } catch (UnsafeQueryException $e) {
-            $this->auditor->record($sql, $physical, null, 0.0, false, $e->getMessage());
+            $this->auditor->record($sql, $auditConnection, null, 0.0, false, $e->getMessage());
 
             throw $e;
         }
+
+        $physical = $this->connections->physicalName($connection);
 
         $limit = $this->resolveLimit($limit);
         $dbConnection = $this->connections->connection($connection);

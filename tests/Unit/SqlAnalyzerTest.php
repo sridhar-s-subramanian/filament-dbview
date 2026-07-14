@@ -91,3 +91,18 @@ it('is not fooled by keywords inside single-quoted strings after identifier chan
         ->and($analysis->forbiddenTokens())->toBe([])
         ->and($analysis->tables)->toContain('posts');
 });
+
+it('detects database-qualified table references', function (): void {
+    $analysis = SqlAnalyzer::of('select * from other_db.users');
+
+    expect($analysis->hasQualifiedTableRef)->toBeTrue()
+        ->and($analysis->qualifiedTableRef)->toBe('other_db.users');
+});
+
+it('flags advisory lock and get_lock functions as forbidden', function (string $sql, string $token): void {
+    expect(SqlAnalyzer::of($sql)->forbiddenTokens())->toContain($token);
+})->with([
+    ['select get_lock("a", 1)', 'GET_LOCK'],
+    ['select pg_advisory_lock(1)', 'PG_ADVISORY_LOCK'],
+    ['select pg_terminate_backend(1)', 'PG_TERMINATE_BACKEND'],
+]);

@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Url;
 use SridharSSubramanian\FilamentDbview\Support\Authorization;
+use SridharSSubramanian\FilamentDbview\Support\ConnectionResolver;
 use SridharSSubramanian\FilamentDbview\Support\DynamicModel;
 use SridharSSubramanian\FilamentDbview\Support\ModelDiscovery;
 use SridharSSubramanian\FilamentDbview\Support\Redactor;
@@ -177,7 +178,14 @@ final class DatabaseBrowser extends Page implements HasTable
         $recordActions = [$this->viewAction($info), ...$this->relationshipActions($info)];
 
         return $table
-            ->query(fn(): Builder => DynamicModel::for($info)->newQuery())
+            ->query(function () use ($info): Builder {
+                // Apply statement timeout on the (possibly remapped) connection
+                // before Filament pages/filters run — best-effort DoS control.
+                $resolver = app(ConnectionResolver::class);
+                $resolver->applyTimeout($resolver->connection($info->connection));
+
+                return DynamicModel::for($info)->newQuery();
+            })
             ->heading($info->label())
             ->description($info->table)
             ->columns($this->columnsFor($info))
@@ -333,25 +341,31 @@ final class DatabaseBrowser extends Page implements HasTable
     {
         $redactor = new Redactor();
         $limit = (int) config('filament-dbview.limits.default_rows', 100);
+        $resolver = app(ConnectionResolver::class);
+        $logicalConnection = $foreign->connection ?? (string) config('database.default');
 
         $start = microtime(true);
 
         // Parameter-bound Eloquent query on a read-only dynamic model: no SQL
-        // string is ever assembled from user input (OWASP A03).
-        $rows = $value === null
-            ? []
-            : DynamicModel::for($foreign)
+        // string is ever assembled from user input (OWASP A03). DynamicModel
+        // routes through ConnectionResolver (read_only remaps); apply timeout too.
+        $rows = [];
+
+        if ($value !== null) {
+            $resolver->applyTimeout($resolver->connection($foreign->connection));
+            $rows = DynamicModel::for($foreign)
                 ->newQuery()
                 ->where($foreignColumn, $value)
                 ->limit($limit)
                 ->get()
                 ->map(static fn($model): array => $model->getAttributes())
                 ->all();
+        }
 
         return \SridharSSubramanian\FilamentDbview\Support\ResultSet::fromRows(
             rows: array_values($rows),
             redactor: $redactor,
-            connection: $foreign->connection ?? (string) config('database.default'),
+            connection: $resolver->physicalName($logicalConnection),
             durationMs: (microtime(true) - $start) * 1000,
             maxBytes: (int) config('filament-dbview.limits.max_result_bytes', 5 * 1024 * 1024),
         );

@@ -12,6 +12,10 @@ use Illuminate\Database\Eloquent\Model;
  * browser reuse Filament's Eloquent-bound TableBuilder (search/sort/filter/
  * paginate) while still querying the table directly. Persistence is disabled
  * so the model can never write.
+ *
+ * The connection is resolved through {@see ConnectionResolver} so optional
+ * read-only connection remaps apply to the Database Browser the same way they
+ * do to the Query Runner.
  */
 abstract class DynamicModel extends Model
 {
@@ -26,8 +30,12 @@ abstract class DynamicModel extends Model
     {
         $model = new class extends DynamicModel {};
 
+        $resolver = app(ConnectionResolver::class);
+        // Honour connections.read_only remaps (e.g. mysql → mysql_readonly).
+        $physical = $resolver->physicalName($info->connection);
+
         $model->setTable($info->table);
-        $model->setConnection($info->connection);
+        $model->setConnection($physical);
         $model->setKeyName($info->keyName ?? 'id');
         $model->setKeyType('string');
         $model->incrementing = false;

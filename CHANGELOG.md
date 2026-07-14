@@ -5,6 +5,20 @@ All notable changes to `filament-dbview` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Security: high-severity hardening.**
+  - **Connection allowlist enforced** on every Query Runner execute (blocks
+    Livewire clients from pointing at arbitrary Laravel connections).
+  - **Schema/database-qualified table names rejected** (`other_db.users`,
+    `public.posts`) so an allowed bare name cannot unlock another catalog.
+  - **Database Browser** uses `ConnectionResolver` for optional `read_only`
+    remaps and applies statement timeouts on browse / relationship previews.
+  - **Expanded denylist** for side-effect SELECTs: `GET_LOCK` / advisory locks,
+    `pg_terminate_backend`, `OPENROWSET`, and related primitives.
+
 ## [1.3.0] - 2026-07-14
 
 ### Changed

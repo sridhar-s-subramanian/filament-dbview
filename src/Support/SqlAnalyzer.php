@@ -44,6 +44,14 @@ final class SqlAnalyzer
         'LO_IMPORT', 'LO_EXPORT', 'DBLINK', 'XP_CMDSHELL', 'SP_EXECUTESQL',
         'SYS_EXEC', 'SYS_EVAL', 'BENCHMARK', 'SLEEP', 'PG_SLEEP', 'WAITFOR',
         'RANDOMBLOB', 'ZEROBLOB', 'READFILE', 'WRITEFILE', 'EDITBLOB',
+        // Session locks / side-effecting lock primitives (DoS / interference).
+        'GET_LOCK', 'RELEASE_LOCK', 'IS_USED_LOCK', 'IS_FREE_LOCK',
+        'PG_ADVISORY_LOCK', 'PG_ADVISORY_XACT_LOCK', 'PG_ADVISORY_UNLOCK',
+        'PG_TRY_ADVISORY_LOCK', 'PG_TRY_ADVISORY_XACT_LOCK',
+        'PG_ADVISORY_UNLOCK_ALL', 'PG_TERMINATE_BACKEND', 'PG_CANCEL_BACKEND',
+        'PG_RELOAD_CONF', 'PG_ROTATE_LOGFILE',
+        // Cross-engine / remote read surfaces.
+        'OPENROWSET', 'OPENDATASOURCE', 'OPENQUERY', 'OPENXML',
     ];
 
     /**
@@ -99,6 +107,19 @@ final class SqlAnalyzer
      * name (e.g. exotic quoting). Scope checks must fail closed on this.
      */
     public bool $hasUnresolvableTableRef = false;
+
+    /**
+     * True when a FROM/JOIN target used database/schema qualification
+     * (`other_db.users`, `public.posts`). Fail closed — only bare table names
+     * from the allowlist are accepted so cross-database reads cannot piggyback
+     * on an allowed bare name.
+     */
+    public bool $hasQualifiedTableRef = false;
+
+    /**
+     * The first multi-part table reference seen (for error messages), if any.
+     */
+    public ?string $qualifiedTableRef = null;
 
     /** @var list<string> */
     public array $tables;
@@ -492,6 +513,15 @@ final class SqlAnalyzer
                     $this->hasUnresolvableTableRef = true;
 
                     return;
+                }
+
+                // db.schema.table / other_db.users — never silently reduce to the
+                // bare name for scope (that allowed cross-database reads).
+                if (str_contains($qualified, '.')) {
+                    $this->hasQualifiedTableRef = true;
+                    $this->qualifiedTableRef ??= $qualified;
+                    // Still record the bare name so denials / tooling can name it,
+                    // but assertInScope rejects via hasQualifiedTableRef first.
                 }
 
                 $table = $this->unqualify($qualified);

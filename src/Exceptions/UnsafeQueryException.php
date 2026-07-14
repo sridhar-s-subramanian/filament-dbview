@@ -46,4 +46,16 @@ final class UnsafeQueryException extends RuntimeException
     {
         return new self('A table reference could not be resolved safely. Use unquoted table names from the allowlist.');
     }
+
+    public static function connectionNotAllowed(?string $connection): self
+    {
+        $name = $connection === null || $connection === '' ? 'default' : $connection;
+
+        return new self("The database connection \"{$name}\" is not available to the database viewer.");
+    }
+
+    public static function qualifiedTableRef(string $table): self
+    {
+        return new self("Schema- or database-qualified table names are not allowed (\"{$table}\"). Use the bare table name from the allowlist.");
+    }
 }

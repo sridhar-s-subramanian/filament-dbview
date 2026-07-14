@@ -37,6 +37,9 @@ dataset('malicious_payloads', [
     'comma join out of scope' => ['SELECT * FROM posts, sqlite_master'],
     'backtick out of scope' => ['SELECT * FROM `sqlite_master`'],
     'double quote out of scope' => ['SELECT * FROM "sqlite_master"'],
+    'cross database qualification' => ['SELECT * FROM other_db.users'],
+    'get_lock side effect' => ['SELECT GET_LOCK("x", 10)'],
+    'pg_advisory_lock' => ['SELECT pg_advisory_lock(42)'],
 ]);
 
 it('blocks every malicious payload', function (string $sql): void {

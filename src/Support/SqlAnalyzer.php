@@ -121,6 +121,17 @@ final class SqlAnalyzer
      */
     public ?string $qualifiedTableRef = null;
 
+    /**
+     * True when the query requests row locks (FOR UPDATE / FOR SHARE / …).
+     * A read-only viewer must not take locks that can block other sessions.
+     */
+    public bool $hasRowLockClause = false;
+
+    /**
+     * First matched lock clause label (for error messages), if any.
+     */
+    public ?string $rowLockClause = null;
+
     /** @var list<string> */
     public array $tables;
 
@@ -133,6 +144,7 @@ final class SqlAnalyzer
         $this->stripped = $this->strip($raw);
         $this->firstKeyword = $this->extractFirstKeyword($this->stripped);
         [$this->hasStackedStatement, $this->hasTrailingSemicolonOnly] = $this->analyseStatements($this->stripped);
+        $this->detectRowLockClause($this->stripped);
         $this->cteNames = $this->extractCteNames($this->stripped);
         $this->tables = $this->extractTables($this->stripped);
     }
@@ -242,6 +254,32 @@ final class SqlAnalyzer
         // MySQL executable comments: /*! ... */ and /*+ ... */ (optimizer hints
         // can smuggle behaviour). Reject either form.
         return preg_match('/\/\*[!+]/', $sql) === 1;
+    }
+
+    /**
+     * Row-lock suffixes on SELECT. Checked on stripped SQL so literals/comments
+     * cannot smuggle them. Longer phrases first so we report a clear label.
+     */
+    private function detectRowLockClause(string $stripped): void
+    {
+        $patterns = [
+            'FOR NO KEY UPDATE' => '/\bFOR\s+NO\s+KEY\s+UPDATE\b/i',
+            'FOR KEY SHARE' => '/\bFOR\s+KEY\s+SHARE\b/i',
+            'FOR UPDATE' => '/\bFOR\s+UPDATE\b/i',
+            'FOR SHARE' => '/\bFOR\s+SHARE\b/i',
+            'LOCK IN SHARE MODE' => '/\bLOCK\s+IN\s+SHARE\s+MODE\b/i',
+            'SKIP LOCKED' => '/\bSKIP\s+LOCKED\b/i',
+            'NOWAIT' => '/\bNOWAIT\b/i',
+        ];
+
+        foreach ($patterns as $label => $pattern) {
+            if (preg_match($pattern, $stripped) === 1) {
+                $this->hasRowLockClause = true;
+                $this->rowLockClause = $label;
+
+                return;
+            }
+        }
     }
 
     /**
@@ -610,7 +648,8 @@ final class SqlAnalyzer
         }
 
         // Alias without AS: identifier that is not a list terminator / join word.
-        if ($word !== null
+        if (
+            $word !== null
             && ! isset(self::TABLE_LIST_TERMINATORS[strtoupper($word)])
             && ! isset(self::TABLE_MODIFIERS[strtoupper($word)])
             && strcasecmp($word, 'AS') !== 0
@@ -698,11 +737,11 @@ final class SqlAnalyzer
         $names = [];
 
         // WITH [RECURSIVE] name [(cols)] AS [NOT] MATERIALIZED? (
-        if (preg_match_all(
-            '/(?:\bWITH\b(?:\s+RECURSIVE)?|,)\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?:\([^)]*\))?\s+AS\s+(?:(?:NOT\s+)?MATERIALIZED\s+)?\(/i',
-            $stripped,
-            $matches,
-        ) !== false) {
+        $ctePattern = '/(?:\bWITH\b(?:\s+RECURSIVE)?|,)\s+'
+            . '([A-Za-z_][A-Za-z0-9_]*)\s*(?:\([^)]*\))?\s+'
+            . 'AS\s+(?:(?:NOT\s+)?MATERIALIZED\s+)?\(/i';
+
+        if (preg_match_all($ctePattern, $stripped, $matches) !== false) {
             foreach ($matches[1] as $name) {
                 $names[strtolower($name)] = $name;
             }
@@ -830,7 +869,8 @@ final class SqlAnalyzer
             $expr = trim($m[1]);
             $alias = $m[2];
 
-            if ($expr !== ''
+            if (
+                $expr !== ''
                 && ! preg_match('/^[A-Za-z_][A-Za-z0-9_]*(\s*\.\s*[A-Za-z_][A-Za-z0-9_]*)*$/', $expr)
             ) {
                 return [

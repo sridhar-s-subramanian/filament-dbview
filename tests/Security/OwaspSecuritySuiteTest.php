@@ -40,6 +40,10 @@ dataset('malicious_payloads', [
     'cross database qualification' => ['SELECT * FROM other_db.users'],
     'get_lock side effect' => ['SELECT GET_LOCK("x", 10)'],
     'pg_advisory_lock' => ['SELECT pg_advisory_lock(42)'],
+    'for share lock' => ['SELECT * FROM posts FOR SHARE'],
+    'for update lock' => ['SELECT * FROM posts FOR UPDATE'],
+    'skip locked' => ['SELECT * FROM posts FOR UPDATE SKIP LOCKED'],
+    'lock in share mode' => ['SELECT * FROM posts LOCK IN SHARE MODE'],
 ]);
 
 it('blocks every malicious payload', function (string $sql): void {

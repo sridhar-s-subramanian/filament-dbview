@@ -66,6 +66,12 @@ final class ReadOnlyGuard
             throw UnsafeQueryException::notSelect();
         }
 
+        if ($analysis->hasRowLockClause) {
+            throw UnsafeQueryException::forbiddenKeyword(
+                $analysis->rowLockClause ?? 'FOR UPDATE',
+            );
+        }
+
         $forbidden = $analysis->forbiddenTokens();
 
         if ($forbidden !== []) {

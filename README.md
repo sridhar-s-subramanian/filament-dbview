@@ -467,6 +467,8 @@ What it handles well today:
 - Comma joins and `JOIN`s; quoted identifiers (backticks / `"…"` / `[…]`)
 - Rejecting stacked statements, executable comments, many write/DoS tokens
 - Rejecting schema/database-qualified table names (`other_db.users`)
+- Rejecting row-lock clauses (`FOR UPDATE`, `FOR SHARE`, `SKIP LOCKED`,
+  `LOCK IN SHARE MODE`, …) so the viewer cannot block other sessions
 - Postgres-style `AS MATERIALIZED` / `AS NOT MATERIALIZED` CTEs
 
 Practical guidance:

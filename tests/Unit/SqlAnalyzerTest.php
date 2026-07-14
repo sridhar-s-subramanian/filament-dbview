@@ -116,3 +116,26 @@ it('does not treat MATERIALIZED CTE names as real tables', function (): void {
         ->and($analysis->tables)->toContain('posts')
         ->and($analysis->tables)->not->toContain('x');
 });
+
+it('detects row-lock clauses on SELECT', function (string $sql, string $label): void {
+    $analysis = SqlAnalyzer::of($sql);
+
+    expect($analysis->hasRowLockClause)->toBeTrue()
+        ->and($analysis->rowLockClause)->toBe($label);
+})->with([
+    'for update' => ['SELECT * FROM posts FOR UPDATE', 'FOR UPDATE'],
+    'for share' => ['SELECT * FROM posts FOR SHARE', 'FOR SHARE'],
+    'for no key update' => ['SELECT * FROM posts FOR NO KEY UPDATE', 'FOR NO KEY UPDATE'],
+    'for key share' => ['SELECT * FROM posts FOR KEY SHARE', 'FOR KEY SHARE'],
+    'skip locked' => ['SELECT * FROM posts FOR UPDATE SKIP LOCKED', 'FOR UPDATE'],
+    'nowait' => ['SELECT * FROM posts FOR SHARE NOWAIT', 'FOR SHARE'],
+    'lock in share mode' => ['SELECT * FROM posts LOCK IN SHARE MODE', 'LOCK IN SHARE MODE'],
+    'skip locked alone after for update of' => ['SELECT id FROM posts FOR UPDATE OF posts SKIP LOCKED', 'FOR UPDATE'],
+]);
+
+it('does not treat lock phrases inside string literals as row locks', function (): void {
+    $analysis = SqlAnalyzer::of("SELECT * FROM posts WHERE note = 'FOR SHARE NOWAIT'");
+
+    expect($analysis->hasRowLockClause)->toBeFalse()
+        ->and($analysis->isSelect())->toBeTrue();
+});

@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `table_gate` and `allTables()`. Config comments expanded with examples.
 - README **SQL analysis limits** plus a CTE regression corpus; CTE name
   extraction now recognises Postgres `AS MATERIALIZED` / `AS NOT MATERIALIZED`.
+- **Reject row-lock clauses** on Query Runner SELECTs (`FOR UPDATE` / `FOR SHARE`
+  / `FOR KEY SHARE` / `SKIP LOCKED` / `NOWAIT` / `LOCK IN SHARE MODE`).
 
 ### Fixed
 

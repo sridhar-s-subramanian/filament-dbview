@@ -234,7 +234,7 @@
                 </div>
             @endif
 
-            @if (config('filament-dbview.features.history', true))
+            @if (config('filament-dbview.features.history', false))
                 <div class="fdbv-qr-card">
                     <div class="fdbv-qr-card-head">{{ __('Recent queries') }}</div>
                     <div class="fdbv-qr-list">

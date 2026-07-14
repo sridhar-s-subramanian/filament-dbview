@@ -114,7 +114,14 @@ return [
         'query_runner' => true,
         'explain' => true,
         'export' => true,
-        'history' => true,
+
+        // Feature opt-in: when true, every allowed/denied query is written to
+        // dbview_query_history and the Query Runner history panel is shown.
+        // The table migration still ships; this only controls writes + UI so the
+        // table cannot grow unbounded on busy panels. Enable via config or
+        // DbviewPlugin::make()->history().
+        'history' => false,
+
         'saved_queries' => true,
         'relationship_preview' => true,
         'structure' => true,

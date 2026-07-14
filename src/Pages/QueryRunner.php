@@ -385,7 +385,7 @@ final class QueryRunner extends Page
      */
     public function getHistory(): \Illuminate\Support\Collection
     {
-        if (! config('filament-dbview.features.history', true)) {
+        if (! config('filament-dbview.features.history', false)) {
             return collect();
         }
 

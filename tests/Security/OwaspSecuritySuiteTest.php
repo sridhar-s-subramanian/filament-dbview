@@ -57,7 +57,9 @@ it('positive control: explaining a benign scoped SELECT is allowed', function ()
     expect($result->rowCount)->toBeGreaterThan(0);
 });
 
-it('records denied attempts to the audit history', function (): void {
+it('records denied attempts to the audit history when history is enabled', function (): void {
+    config()->set('filament-dbview.features.history', true);
+
     try {
         securityGuard()->run('DROP TABLE posts');
     } catch (UnsafeQueryException) {

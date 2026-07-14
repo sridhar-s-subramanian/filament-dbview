@@ -16,6 +16,8 @@ final class DbviewPlugin implements Plugin
     /** @var list<string>|null */
     private ?array $queryRunnerDeny = null;
 
+    private ?bool $history = null;
+
     public function getId(): string
     {
         return 'filament-dbview';
@@ -67,6 +69,19 @@ final class DbviewPlugin implements Plugin
         return $this;
     }
 
+    /**
+     * Enable the query-history feature: persist every allowed/denied query to
+     * dbview_query_history and show the per-user history panel in the Query
+     * Runner. Off by default so the table stays empty on busy panels (the
+     * migration still ships). PSR-3 audit logging is unaffected and always runs.
+     */
+    public function history(bool $condition = true): static
+    {
+        $this->history = $condition;
+
+        return $this;
+    }
+
     public function register(Panel $panel): void
     {
         $pages = [DatabaseBrowser::class];
@@ -96,6 +111,10 @@ final class DbviewPlugin implements Plugin
 
         if ($this->queryRunnerDeny !== null) {
             config()->set('filament-dbview.query_runner.deny', $this->queryRunnerDeny);
+        }
+
+        if ($this->history !== null) {
+            config()->set('filament-dbview.features.history', $this->history);
         }
     }
 }

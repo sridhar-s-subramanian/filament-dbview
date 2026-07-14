@@ -14,7 +14,8 @@ to explore data:
   slide-over, and one-click relationship previews via detected foreign keys.
 - **Query Runner** — run ad-hoc `SELECT` queries in an Adminer-style console, with
   `EXPLAIN` / `EXPLAIN ANALYZE`, a table **structure** view (columns, indexes,
-  foreign keys), CSV/JSON export, per-user query history, and saved queries.
+  foreign keys), CSV/JSON export, saved queries, and optional per-user query
+  history (feature opt-in; table migration ships with the package).
 
 Everything the viewer can reach is defined by the models it discovers — nothing
 else is exposed.
@@ -45,10 +46,23 @@ public function panel(Panel $panel): Panel
 }
 ```
 
-The migrations create two small tables (`dbview_query_history`,
-`dbview_saved_queries`) used by the Query Runner's history and saved-query
-features. If you don't use those features you can skip the migration step and
-turn them off in the config.
+The migrations create two package tables (both ship by default):
+
+- `dbview_saved_queries` — saved Query Runner snippets (feature on by default)
+- `dbview_query_history` — storage for per-user query history
+
+**History writes and UI are opt-in** (`features.history` defaults to `false`) so
+the table does not grow unbounded on busy panels. The table may still be empty
+after migrate until you enable the feature:
+
+```php
+$panel->plugin(
+    DbviewPlugin::make()
+        ->history() // persist + show per-user query history
+);
+```
+
+PSR-3 audit logging always runs, whether or not history is enabled.
 
 ## Features
 
@@ -79,8 +93,8 @@ An Adminer-style console for SQL-literate users:
 - **Show structure** — the sidebar lists tables; each has a structure icon that
   shows the table's **columns** (name, type, nullable, default, PK/auto-increment),
   **indexes**, and **foreign keys**, Adminer-style.
-- **Export** results to CSV or JSON, a per-user **query history**, and **saved
-  queries**.
+- **Export** results to CSV or JSON, **saved queries**, and optional per-user
+  **query history** (feature off by default; enable with `->history()`).
 - A searchable **table sidebar** — click a table name to insert it into the editor,
   the structure icon to inspect it, or the browse link to open it in the Database
   Browser.
@@ -113,6 +127,11 @@ $panel->plugin(
 guards and column redaction still apply to every table. These setters take
 precedence over the `query_runner` values in the config file.
 
+Query history is **off by default** (the `dbview_query_history` migration still
+ships). Enable the feature with `->history()` or `features.history => true` when
+you want the Query Runner to persist and re-load per-user queries; PSR-3 audit
+logging continues regardless.
+
 ## Security model (read-only in depth)
 
 Direct database access is guarded on multiple, independent layers — see
@@ -138,8 +157,8 @@ Additional controls:
   browser, the runner, and every export.
 - **Deny-by-default authorization** via configurable gates (page, query-runner,
   and per-table).
-- **Auditing** of every allowed/denied attempt to a PSR-3 channel and the history
-  table.
+- **Auditing** of every allowed/denied attempt to a PSR-3 channel (and to the
+  history table when `features.history` is enabled).
 
 ## Configuration
 
@@ -171,7 +190,7 @@ Everything is configured in `config/filament-dbview.php`. The most useful knobs:
     'explain'              => true,      // EXPLAIN / EXPLAIN ANALYZE buttons
     'structure'            => true,      // "Show structure" (columns/indexes/FKs)
     'export'               => true,
-    'history'              => true,
+    'history'              => false,     // feature opt-in (table still migrates); ->history()
     'saved_queries'        => true,
     'relationship_preview' => true,      // FK preview actions in the browser
 ],

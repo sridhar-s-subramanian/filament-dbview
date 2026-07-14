@@ -5,6 +5,16 @@ All notable changes to `filament-dbview` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Query history feature is opt-in.** `features.history` defaults to `false` so
+  rows are not written (and the UI panel is hidden) unless enabled — the
+  `dbview_query_history` migration still ships with the package. Enable with
+  `DbviewPlugin::make()->history()` or `features.history => true`. PSR-3 audit
+  logging is unchanged and always runs.
+
 ## [1.2.0] - 2026-07-07
 
 ### Added

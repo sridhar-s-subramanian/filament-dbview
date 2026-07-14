@@ -37,3 +37,25 @@ it('leaves config untouched when no setter is called', function (): void {
 
     expect(config('filament-dbview.query_runner.scope'))->toBe('connection');
 });
+
+it('defaults query history to off', function (): void {
+    expect(config('filament-dbview.features.history'))->toBeFalse();
+});
+
+it('enables history fluently via the plugin', function (): void {
+    DbviewPlugin::make()->history()->applyConfiguration();
+
+    expect(config('filament-dbview.features.history'))->toBeTrue();
+
+    DbviewPlugin::make()->history(false)->applyConfiguration();
+
+    expect(config('filament-dbview.features.history'))->toBeFalse();
+});
+
+it('does not override history when history() was not called', function (): void {
+    config()->set('filament-dbview.features.history', true);
+
+    DbviewPlugin::make()->applyConfiguration();
+
+    expect(config('filament-dbview.features.history'))->toBeTrue();
+});

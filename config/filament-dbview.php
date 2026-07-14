@@ -9,11 +9,11 @@ return [
     | Model discovery
     |--------------------------------------------------------------------------
     |
-    | The viewer is scoped to the host application's Eloquent models. These
-    | directories are scanned for concrete Model subclasses; the discovered
-    | model => table => connection map is the hard allowlist used by both the
-    | browser and the query runner. Nothing outside this allowlist is ever
-    | reachable (see "table scope" enforcement in ReadOnlyGuard).
+    | Directories scanned for concrete Eloquent Model subclasses. The discovered
+    | model => table => connection map is the default allowlist for the Database
+    | Browser (always) and for the Query Runner when query_runner.scope is
+    | "models". When scope is "connection" (allTables), the runner may also
+    | query other real tables on allowed connections (see query_runner below).
     |
     */
 
@@ -165,13 +165,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Authorization (OWASP A01 — deny by default)
+    | Authorization (opt-in — allow by default)
     |--------------------------------------------------------------------------
     |
-    | "gate" (if set) is the Gate ability checked before a user may access any
-    | dbview page. "query_runner_gate" additionally guards the raw SELECT
-    | runner. "table_gate" (if set) is checked per table to filter the registry
-    | for the current user; it receives the table name as its argument.
+    | With all values null, any user who can open the Filament panel may use
+    | DB View. To restrict by role/permission, set these to Laravel Gate ability
+    | names defined in your app (Spatie, Shield, custom, …). See the README
+    | "Authorization (opt-in)" section.
+    |
+    |   gate              — required to open Database Browser and Query Runner
+    |   query_runner_gate — extra check for Query Runner only (raw SELECT)
+    |   table_gate        — per table; ability receives the table name argument
     |
     */
 

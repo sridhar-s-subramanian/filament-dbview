@@ -8,9 +8,10 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * Centralised, deny-by-default access checks (OWASP A01). Panels wire real
- * roles/policies by pointing the config gates at their own abilities; with no
- * gate configured a page is accessible (the host panel's own auth still runs).
+ * Centralised access checks. Allow-by-default when no gate ability is
+ * configured (host panel auth still applies). Hosts opt into least privilege by
+ * pointing config gates at their own Gate abilities — any roles package or
+ * custom logic can define those abilities (OWASP A01).
  */
 final class Authorization
 {

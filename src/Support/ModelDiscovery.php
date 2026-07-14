@@ -14,7 +14,8 @@ use Throwable;
 /**
  * Discovers the host application's Eloquent models and maps each to its
  * database table, connection, columns and foreign keys. The resulting
- * {@see TableRegistry} is the allowlist that scopes the entire viewer.
+ * {@see TableRegistry} is the default table allowlist for the Browser and for
+ * the Query Runner in models scope.
  */
 final class ModelDiscovery
 {

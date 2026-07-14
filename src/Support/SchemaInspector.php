@@ -15,7 +15,7 @@ use Throwable;
  * and connection-scope tables uniformly and captures composite keys / constraint
  * names that the discovery-time {@see TableInfo} FK list discards. It only ever
  * describes tables that are in scope for the current user — the same scope rules
- * the {@see ReadOnlyGuard} enforces — so it can never reveal a denied table.
+ * the {@see ReadOnlyGuard} enforces — so denied or out-of-scope tables are omitted.
  *
  * @phpstan-type ColumnInfo array{name: string, type: string, nullable: bool, default: string|null, auto_increment: bool, primary: bool}
  * @phpstan-type IndexInfo array{name: string, columns: list<string>, unique: bool, primary: bool}

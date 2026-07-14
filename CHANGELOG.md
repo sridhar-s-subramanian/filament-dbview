@@ -101,7 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Defence-in-depth read-only security: lexical allowlist, model-backed table
   scope, enforced `LIMIT` + statement timeout, always-rolled-back transactions,
   an optional dedicated read-only connection, sensitive-column redaction,
-  deny-by-default authorization gates, and auditing.
+  optional authorization gates (allow-by-default when unset), and auditing.
 - Optional full-database Query Runner scope (`->allTables()` / `->denyTables()`),
   with prefix-resilient handling of prefixed and non-prefixed tables.
 

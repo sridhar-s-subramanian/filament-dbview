@@ -228,7 +228,7 @@ final class DatabaseBrowser extends Page implements HasTable
     /**
      * Adminer-style filter constraints (column → operator → value, combinable
      * with AND/OR groups) auto-derived from each column's type. Sensitive
-     * (redacted) columns are excluded so their values cannot be probed.
+     * (redacted) columns are excluded so filters cannot target them by name.
      *
      * @return list<TextConstraint|NumberConstraint|DateConstraint|BooleanConstraint>
      */

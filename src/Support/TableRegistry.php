@@ -7,8 +7,10 @@ namespace SridharSSubramanian\FilamentDbview\Support;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * The set of model-backed tables the viewer may touch. This is the hard
- * allowlist: any table not present here is unreachable by design.
+ * The set of model-backed tables discovered for the viewer. The Database
+ * Browser is always limited to this set (filtered by table_gate when set).
+ * The Query Runner uses it for models scope; connection scope can add other
+ * real tables beyond this registry.
  */
 final class TableRegistry
 {
@@ -46,9 +48,10 @@ final class TableRegistry
     }
 
     /**
-     * A new registry containing only the tables the given user may view,
-     * according to the configured per-table gate (deny-by-default when the
-     * gate denies). No gate configured => all tables visible.
+     * A new registry containing only the tables the given user may view.
+     * When table_gate is unset, all tables in this registry stay visible.
+     * When table_gate is set, only tables for which the Gate allows the
+     * ability (with the table name as argument) remain.
      */
     public function visibleTo(mixed $user): self
     {

@@ -9,21 +9,23 @@ use SridharSSubramanian\FilamentDbview\Exceptions\RollbackSignal;
 use SridharSSubramanian\FilamentDbview\Exceptions\UnsafeQueryException;
 
 /**
- * The single gate every raw query passes through. Enforces read-only access in
- * depth (OWASP A03 injection / write-prevention):
+ * The single gate every raw Query Runner query passes through. Enforces
+ * read-only access in depth (OWASP A03 injection / write-prevention):
  *
  *   1. Lexical allowlist  — single SELECT/WITH statement, no stacked queries,
  *                           no executable comments, no write/DDL/file/DoS tokens.
- *   2. Table scope        — every referenced table must be in the model
- *                           allowlist the current user is permitted to see.
- *   3. Enforced LIMIT     — the query is wrapped and hard-capped.
- *   4. Rolled-back txn     — executed inside a transaction that always rolls
+ *   2. Table scope        — models scope: discovered models the user may see;
+ *                           connection scope: any real table on the connection
+ *                           except the deny list.
+ *   3. Connection allowlist — requested app connection must be permitted.
+ *   4. Enforced LIMIT     — the query is wrapped and hard-capped.
+ *   5. Rolled-back txn    — executed inside a transaction that always rolls
  *                           back, so nothing can persist even if a layer above
  *                           were bypassed.
- *   5. Read-only conn      — optionally routed through a SELECT-only database
+ *   6. Read-only conn     — optionally routed through a SELECT-only database
  *                           user (configured in ConnectionResolver).
  *
- * Every attempt is audited.
+ * Every attempt is audited (PSR-3; history table only if features.history).
  */
 final class ReadOnlyGuard
 {

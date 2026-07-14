@@ -5,9 +5,9 @@
 [![PHP Version](https://img.shields.io/packagist/php-v/sridhar-s-subramanian/filament-dbview.svg?style=flat-square)](https://packagist.org/packages/sridhar-s-subramanian/filament-dbview)
 [![License](https://img.shields.io/packagist/l/sridhar-s-subramanian/filament-dbview.svg?style=flat-square)](LICENSE.md)
 
-An Adminer-like, **strictly read-only** database viewer for [Filament](https://filamentphp.com)
-panels. It is scoped to your Laravel app's Eloquent models and gives you two ways
-to explore data:
+An Adminer-like, **read-only** database viewer for [Filament](https://filamentphp.com)
+panels. By default it is scoped to your app's Eloquent models and gives you two
+ways to explore data:
 
 - **Database Browser** — pick any model-backed table and browse it with Filament's
   native table (search, sort, per-column filters, pagination), a full-record
@@ -17,8 +17,9 @@ to explore data:
   foreign keys), CSV/JSON export, saved queries, and optional per-user query
   history (feature opt-in; table migration ships with the package).
 
-Everything the viewer can reach is defined by the models it discovers — nothing
-else is exposed.
+By default the viewer is scoped to Eloquent models your app discovers. The Query
+Runner can optionally list every table on an allowed connection (`->allTables()`)
+so you can run `SELECT`s without a model — see [Query Runner scope](#query-runner-scope).
 
 ## Requirements
 
@@ -150,6 +151,110 @@ ships). Enable the feature with `->history()` or `features.history => true` when
 you want the Query Runner to persist and re-load per-user queries; PSR-3 audit
 logging continues regardless.
 
+## Authorization (opt-in)
+
+Access is **allow by default** for anyone who can open your Filament panel.
+This package does **not** ship a roles system and does not depend on Spatie
+Permission, Filament Shield, Bouncer, or similar. Panel login is enough unless
+you opt in to extra checks.
+
+To restrict by role or permission, point the package at Laravel **Gate** ability
+names. Any roles plugin (or your own logic) can define those abilities — the
+package only calls `Gate::allows(...)`.
+
+| Config key | Default | When set (opt-in) |
+|---|---|---|
+| `authorization.gate` | `null` → allow | User must pass this ability to open Browser and Runner |
+| `authorization.query_runner_gate` | `null` → allow | Extra ability required for Query Runner only |
+| `authorization.table_gate` | `null` → all in-scope tables | Per-table filter; ability receives the **table name** |
+
+### 1. Publish config (if you have not already)
+
+```bash
+php artisan vendor:publish --tag="filament-dbview-config"
+```
+
+### 2. Define Gate abilities in your app
+
+Register them in `AppServiceProvider`, `AuthServiceProvider`, or wherever you
+define policies — **using whatever permission system you already have**.
+
+**Custom / simple:**
+
+```php
+use Illuminate\Support\Facades\Gate;
+
+Gate::define('viewDbview', function ($user) {
+    return (bool) ($user->is_admin ?? false);
+});
+
+Gate::define('runDbviewQueries', function ($user) {
+    return (bool) ($user->is_admin ?? false);
+});
+
+// Optional: limit which tables appear / can be queried
+Gate::define('viewDbviewTable', function ($user, string $table) {
+    return in_array($table, ['users', 'orders', 'posts'], true);
+});
+```
+
+**Spatie Laravel Permission** (or any package that exposes `$user->can(...)`):
+
+```php
+use Illuminate\Support\Facades\Gate;
+
+Gate::define('viewDbview', fn ($user) => $user->can('dbview.access'));
+Gate::define('runDbviewQueries', fn ($user) => $user->can('dbview.query'));
+Gate::define('viewDbviewTable', fn ($user, string $table) =>
+    $user->can('dbview.tables.*') || $user->can("dbview.tables.{$table}")
+);
+```
+
+Ability names are arbitrary — use whatever strings you prefer, then mirror them
+in config.
+
+### 3. Point the package at those abilities
+
+In `config/filament-dbview.php`:
+
+```php
+'authorization' => [
+    // Leave as null to allow every authenticated panel user (default).
+    'gate' => 'viewDbview',
+
+    // Optional: tighter control for the Query Runner (raw SELECT console).
+    // If set, the user must pass both `gate` and this ability.
+    'query_runner_gate' => 'runDbviewQueries',
+
+    // Optional: hide / block tables the user may not see.
+    // The Gate is invoked as: allows('viewDbviewTable', $tableName)
+    'table_gate' => 'viewDbviewTable',
+],
+```
+
+Or via environment-driven config if you prefer:
+
+```php
+'authorization' => [
+    'gate' => env('FILAMENT_DBVIEW_GATE'),              // null when unset → allow
+    'query_runner_gate' => env('FILAMENT_DBVIEW_QUERY_GATE'),
+    'table_gate' => env('FILAMENT_DBVIEW_TABLE_GATE'),
+],
+```
+
+### Behaviour summary
+
+- **All three `null`** → any user who can access the Filament panel can use DB View
+  (subject to table scope: models vs `allTables()`, etc.).
+- **`gate` set** → user must pass that ability or both pages are hidden / denied.
+- **`query_runner_gate` set** → user must also pass it to open Query Runner;
+  Browser still only needs `gate`.
+- **`table_gate` set** → sidebar, browser, runner scope, and structure only include
+  tables for which the Gate returns true.
+
+If you do not need role-based restrictions, leave the authorization section
+untouched.
+
 ## Security model (read-only in depth)
 
 Direct database access is guarded on multiple, independent layers — see
@@ -157,32 +262,31 @@ Direct database access is guarded on multiple, independent layers — see
 
 1. **Lexical allowlist** — only a single `SELECT` / `WITH … SELECT` statement is
    accepted. Stacked statements, executable comments (`/*! … */`, `/*+ … */`), and
-   write/DDL/file/DoS tokens (`INSERT`, `UPDATE`, `DROP`, `INTO OUTFILE`,
-   `LOAD_FILE`, `pg_read_file`, `SLEEP`, `BENCHMARK`, lock helpers, …) are
-   rejected. Keywords hidden inside string literals or comments cannot fool the
-   analyzer. Schema/database-qualified names (`other_db.users`) are refused.
-2. **Table scope** — in the default `models` scope, every referenced table must
-   belong to a discovered model the current user may see. In `connection` scope
-   (`->allTables()`), any real table on an allowed connection is fair game
-   (optional `denyTables()` exceptions). The Browser stays model-only either way.
+   many write/DDL/file/DoS tokens (`INSERT`, `UPDATE`, `DROP`, `INTO OUTFILE`,
+   `LOAD_FILE`, `SLEEP`, lock helpers, …) are rejected. Strings and comments are
+   stripped before keyword scanning. Schema/database-qualified names
+   (`other_db.users`) are refused. Prefer a SELECT-only DB user as the strongest
+   write barrier (see below).
+2. **Table scope** — default `models` scope: only discovered models the user may
+   see. `connection` scope (`->allTables()`): any real table on an allowed
+   connection (optional `denyTables()`). The Browser is always model-only.
 3. **Connection allowlist** — the runner may only use connections derived from
    discovered models (or an explicit `connections.allowed` list).
 4. **Enforced `LIMIT`** and **statement timeout** cap runaway queries.
-5. **Rolled-back transaction** (Query Runner) — reads execute inside a
-   transaction that is always rolled back, so nothing can persist even if a
-   layer above were bypassed. This also covers `EXPLAIN ANALYZE`.
-6. **Optional dedicated read-only connection** — route Browser and Runner
-   queries through a database user granted only `SELECT` (the strongest control).
+5. **Rolled-back transaction** (Query Runner) — reads run inside a transaction
+   that is always rolled back (including `EXPLAIN ANALYZE`). The Browser uses
+   Eloquent reads with optional read-only connection remaps and timeouts.
+6. **Optional dedicated read-only connection** — map app connections to a DB user
+   granted only `SELECT` (recommended for production).
 
 Additional controls:
 
 - **Sensitive-column redaction** (`password`, `*_token`, `*_secret`, …) in the
-  browser, the runner, and every export (including alias/expression selects).
-- **Configurable authorization** via gates (page, query-runner, and per-table).
-  Gates are off by default (`null`); the host panel’s own auth still applies —
-  set gates for least privilege in multi-role apps.
-- **Auditing** of every allowed/denied attempt to a PSR-3 channel (and to the
-  history table when `features.history` is enabled).
+  browser, the runner, and exports (including common alias/expression cases).
+- **Authorization** — allow any panel user by default; optional Laravel Gates
+  (see [Authorization (opt-in)](#authorization-opt-in)).
+- **Auditing** — every allowed/denied Query Runner attempt is written to a PSR-3
+  log channel; the history table is used only when `features.history` is enabled.
 
 ## Configuration
 
@@ -224,10 +328,11 @@ Everything is configured in `config/filament-dbview.php`. The most useful knobs:
     'deny'  => [],                       // optional blocks in connection scope only
 ],
 
+// Authorization is allow-by-default; set ability names to opt in (see Authorization section).
 'authorization' => [
-    'gate'              => null,         // null = any panel user; set a Gate ability in production
-    'query_runner_gate' => null,         // additionally guards the SELECT runner
-    'table_gate'        => null,         // per-table filter (receives table name)
+    'gate'              => null,         // e.g. 'viewDbview'
+    'query_runner_gate' => null,         // e.g. 'runDbviewQueries'
+    'table_gate'        => null,         // e.g. 'viewDbviewTable' (receives table name)
 ],
 
 'audit' => ['log_channel' => null],      // PSR-3 channel for audit lines

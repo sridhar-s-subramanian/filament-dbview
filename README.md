@@ -21,6 +21,10 @@ By default the viewer is scoped to Eloquent models your app discovers. The Query
 Runner can optionally list every table on an allowed connection (`->allTables()`)
 so you can run `SELECT`s without a model — see [Query Runner scope](#query-runner-scope).
 
+**AI assistants / agents:** start with [AGENTS.md](AGENTS.md) for a configuration
+checklist (install, defaults, gates, audit, production). This README has the full
+narrative docs.
+
 ## Requirements
 
 - PHP 8.2+
